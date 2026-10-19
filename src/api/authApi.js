@@ -5,7 +5,7 @@ export async function sendOtp(mobile, type = "signup") {
   const response = await api.post("/auth/send-otp", {
     mobile,
     type,
-  });
+  }); 
 
   return response.data;
 }
