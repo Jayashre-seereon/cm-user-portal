@@ -1,0 +1,60 @@
+/* Career Bee assistant — scoped helpers (no global font/colour overrides). */
+
+@keyframes career-bee-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes career-bee-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes career-bee-pop {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.career-bee-float {
+  animation: career-bee-float 2.2s ease-in-out infinite;
+}
+
+.career-bee-dot {
+  animation: career-bee-dot 1.2s ease-in-out infinite;
+}
+
+.career-bee-pop {
+  animation: career-bee-pop 0.2s ease-out;
+}
+
+.career-bee-scroll {
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .career-bee-float,
+  .career-bee-dot,
+  .career-bee-pop {
+    animation: none;
+  }
+}
