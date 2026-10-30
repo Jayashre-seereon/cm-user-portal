@@ -10,6 +10,7 @@ import {
 import { State } from "country-state-city";
 
 import { getInstitutes, getCategories } from "../../../api/instituteApi";
+import { globalSearch } from "../../../api/searchApi";
 import { institutes as fallbackInstitutes } from "../../../data/careermapData";
 import { ModuleScreen, PageHero } from "../../../components/ui";
 import {
@@ -66,14 +67,92 @@ export default function InstitutePage() {
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [searchResult, setSearchResult] = useState(null);
+  const [requestedInstituteId, setRequestedInstituteId] = useState(() =>
+    new URLSearchParams(window.location.search).get("instituteId") || ""
+  );
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const q = params.get("search") || params.get("q");
+    setRequestedInstituteId(params.get("instituteId") || "");
+    const selected = location.state?.searchItem;
+    const selectedGroup = String(selected?.group || "").toLowerCase();
+    const selectedType = String(selected?.type || "").toLowerCase();
+    if (selected && (selectedGroup === "institutions" || selectedGroup === "colleges" || selectedType === "institution" || params.has("instituteId"))) {
+      setSearchResult({
+        id: String(selected.id ?? selected.navigation?.id ?? params.get("instituteId") ?? selected.title),
+        name: selected.title || selected.name || "Unnamed Institute",
+        location: selected.subtitle || selected.location || "Location not available",
+        city: selected.city || "",
+        state: selected.state || "",
+        country: selected.country || "",
+        type: selected.badge || selected.institute_type || "Institute",
+        logo: selected.image || selected.logo || null,
+        website: selected.url || selected.website || "",
+        createdAt: null,
+      });
+    }
     if (q !== null && q !== undefined) {
       setSearch(q);
     }
-  }, [location.search]);
+  }, [location.search, location.state]);
+
+  // Global search results can point to institutes on any of the 505 pages.
+  // Resolve the query through the same search index and add its match even
+  // when the current paginated API page does not contain that institute.
+  useEffect(() => {
+    if (location.state?.searchItem) return;
+    setSearchResult(null);
+    if (!search.trim()) return;
+    let active = true;
+
+    async function loadSelectedInstitute() {
+      try {
+        const response = await globalSearch({
+          query: search,
+          type: "institutions",
+          limit: 50,
+        });
+        if (!active) return;
+
+        const results = Array.isArray(response?.results)
+          ? response.results
+          : Object.values(response?.grouped || {}).flat();
+        const normalizedSearch = search.trim().toLocaleLowerCase();
+        const selected = results.find((result) => {
+          const resultId = result?.id ?? result?.navigation?.id;
+          const resultTitle = String(result?.title || result?.name || "").trim().toLocaleLowerCase();
+          return (requestedInstituteId && String(resultId ?? "") === String(requestedInstituteId)) ||
+            resultTitle === normalizedSearch ||
+            resultTitle.includes(normalizedSearch);
+        });
+        if (!selected) return;
+
+        const selectedId = String(selected.id ?? selected.navigation?.id ?? requestedInstituteId ?? selected.title);
+        setSearchResult((current) => {
+          if (current && String(current.id) === selectedId) return current;
+          return {
+            id: selectedId,
+            name: selected.title || selected.name || "Unnamed Institute",
+            location: selected.subtitle || selected.location || "Location not available",
+            city: selected.city || "",
+            state: selected.state || "",
+            country: selected.country || "",
+            type: selected.badge || selected.institute_type || "Institute",
+            logo: selected.image || selected.logo || null,
+            website: selected.url || selected.website || "",
+            createdAt: null,
+          };
+        });
+      } catch (err) {
+        console.error("Failed to resolve selected institute:", err);
+      }
+    }
+
+    loadSelectedInstitute();
+    return () => { active = false; };
+  }, [requestedInstituteId, search, location.state]);
 
   /*
    * ============================================================
@@ -203,8 +282,12 @@ export default function InstitutePage() {
    */
   const filtered = useMemo(
     () =>
-      items
+      // A clicked global-search result is the user's exact selection. Keep it
+      // visible directly; filtering that synthetic card again can discard it
+      // when the backend's title/query formatting differs slightly.
+      (searchResult ? [searchResult] : items)
         .filter((item) => {
+          if (searchResult && String(item.id) === String(searchResult.id)) return true;
           const instituteType =
             item.type || item.institute_type || "";
 
@@ -232,7 +315,7 @@ export default function InstitutePage() {
 
           return Number(b.id) - Number(a.id);
         }),
-    [items, search]
+    [items, search, searchResult]
   );
 
   /*

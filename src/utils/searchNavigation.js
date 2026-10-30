@@ -58,9 +58,13 @@ export function resolveNavigationTarget(item) {
     rawUrl.includes("institute") ||
     rawUrl.includes("college")
   ) {
-    return id
-      ? `/app/institutes?instituteId=${encodeURIComponent(id)}&search=${title}`
-      : `/app/institutes?search=${title}`;
+    const params = new URLSearchParams();
+    if (id) params.set("instituteId", String(id));
+    const instituteTitle = item.title || item.name || "";
+    if (instituteTitle) params.set("search", instituteTitle);
+    return params.size
+      ? `/app/institutes?${params.toString()}`
+      : "/app/institutes";
   }
 
   // 3. Entrance Exams
