@@ -27,6 +27,18 @@ const getExamFamily = (value = "") => {
   return family?.[1] || normalized;
 };
 
+const isDeadlineComingSoon = (value) => {
+  if (!value) return false;
+  const deadline = new Date(value);
+  if (Number.isNaN(deadline.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  deadline.setHours(0, 0, 0, 0);
+  const monthBeforeDeadline = new Date(deadline);
+  monthBeforeDeadline.setMonth(monthBeforeDeadline.getMonth() - 1);
+  return today >= monthBeforeDeadline && today < deadline;
+};
+
 
 export default function EntranceExamPage() {
   const { goToDashboard } = usePortalNavigation();
@@ -551,7 +563,7 @@ if (selectedExam) {
                <div className={`absolute  right-3 flex h-8 w-8 items-center justify-center rounded-full ${isFree ? "bg-green-50" : "bg-red-50"}`}>
                 {isFree ? <UnlockOutlined className="text-green-600" /> : <LockOutlined className="text-red-500" />}
               </div>
-              <p className="m-0 line-clamp-2 flex-1 text-[25px] font-bold leading-snug text-[#1a0a09]">
+              <p className="m-0 line-clamp-2 pr-10 text-[25px] font-bold leading-snug text-[#1a0a09]">
                 {item.name}
               </p>
 
@@ -584,6 +596,8 @@ if (selectedExam) {
                 >
                   View
                 </button>
+
+                {isDeadlineComingSoon(item.lastDateRaw) ? <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-amber-800">Coming soon</span> : null}
 
                 {item.website && item.website !== "#" ? (
                   <a

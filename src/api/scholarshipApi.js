@@ -37,8 +37,23 @@ function getDaysRemaining(deadline) {
     return null;
   }
 
-  const diffMs = parsedDate.getTime() - Date.now();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  parsedDate.setHours(0, 0, 0, 0);
+  const diffMs = parsedDate.getTime() - today.getTime();
   return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+}
+
+function isDeadlineComingSoon(deadline) {
+  if (!deadline) return false;
+  const parsedDate = new Date(deadline);
+  if (Number.isNaN(parsedDate.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  parsedDate.setHours(0, 0, 0, 0);
+  const monthBeforeDeadline = new Date(parsedDate);
+  monthBeforeDeadline.setMonth(monthBeforeDeadline.getMonth() - 1);
+  return today >= monthBeforeDeadline && today < parsedDate;
 }
 
 function getScholarshipStatus(deadline) {
@@ -98,6 +113,7 @@ function mapScholarshipItem(item, index) {
     rawPrice: item?.price || "",
     deadline: formatDeadline(item?.deadline),
     daysRemaining: getDaysRemaining(item?.deadline),
+    comingSoon: isDeadlineComingSoon(item?.deadline),
     tag: scholarshipType,
     status: getScholarshipStatus(item?.deadline),
     provider: scholarshipType,
