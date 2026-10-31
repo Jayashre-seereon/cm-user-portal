@@ -32,9 +32,8 @@ export default function FloatingContactActions() {
       <button type="button" onClick={() => setOpen(true)} aria-label="Send a message" title="Send a message" className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-xl text-[#9a2119] shadow-lg ring-1 ring-[#f0e4e2] transition hover:scale-105"><MessageOutlined /></button>
     </div>
     <Modal title="Send us a message" open={open} onCancel={() => setOpen(false)} footer={null} destroyOnHidden>
-      <p className="mb-3 text-sm text-gray-600">We’ll include your account name, email, and phone number.</p>
-      <Input.TextArea rows={4} maxLength={5000} showCount value={text} onChange={(event) => setText(event.target.value)} placeholder="Write your message" />
-      <div className="mt-4 flex justify-end"><Button type="primary" loading={sending} disabled={!text.trim()} onClick={submit}>Send message</Button></div>
+       <Input.TextArea rows={4} maxLength={5000} showCount value={text} onChange={(event) => setText(event.target.value)} placeholder="Write your message" />
+      <div className="mt-4 flex justify-end"><Button type="primary" loading={sending} disabled={!text.trim()} onClick={submit}>How Can We Help You?</Button></div>
     </Modal>
   </>;
 }
