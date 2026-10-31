@@ -16,6 +16,17 @@ import { checkModuleAccess } from "../../../api/moduleAccessApi";
 import { Select } from "antd";
 const { Option } = Select;
 
+const normalizeExamSearch = (value = "") =>
+  String(value).toLocaleLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "");
+
+const getExamFamily = (value = "") => {
+  const normalized = normalizeExamSearch(value);
+  // Keep the exam family prefix (such as CUETPG or CUETUG), while allowing
+  // variants like "CUET PG - MBA" and "CUET PG (Common...)" to group together.
+  const family = normalized.match(/^(cuet(?:pg|ug)|neet(?:pg|ug)|jee(?:main|advanced)|gate|cat|clat|upsc|ssc|ibps|nda|nata|bitsat|cet)/);
+  return family?.[1] || normalized;
+};
+
 
 export default function EntranceExamPage() {
   const { goToDashboard } = usePortalNavigation();
@@ -167,10 +178,18 @@ useEffect(() => {
   }, [items, location.search, location.state]);
 
 
-  const examOptions = useMemo(
-  () => items.map((item) => ({ value: String(item.id), label: item.name })),
-  [items]
-);
+const examOptions = useMemo(() => {
+  const seen = new Set();
+  return items.flatMap((item) => {
+    const family = getExamFamily(item.name);
+    if (!family || seen.has(family)) return [];
+    seen.add(family);
+    const familyNames = items
+      .filter((candidate) => getExamFamily(candidate.name) === family)
+      .map((candidate) => candidate.name);
+    return [{ value: family, label: familyNames.length > 1 ? `${item.name.split(/[\s(–—-]/)[0]} ${item.name.toUpperCase().includes("PG") ? "PG" : "UG"}` : item.name }];
+  });
+}, [items]);
 function scrollToSection(id) {
   const element = document.getElementById(id);
 
@@ -215,7 +234,7 @@ const filtered = useMemo(
 
       const matchesExam =
         !selectedExamId ||
-        String(item.id) === String(selectedExamId);
+        getExamFamily(item.name) === String(selectedExamId);
 
       const matchesMode =
         !mode ||
@@ -457,6 +476,9 @@ if (selectedExam) {
       allowClear
       placeholder="Search Exam"
       optionFilterProp="label"
+      filterOption={(input, option) =>
+        normalizeExamSearch(option?.label).includes(normalizeExamSearch(input))
+      }
       value={selectedExamId || undefined}
       onChange={(value) => setSelectedExamId(value || "")}
       options={examOptions}
