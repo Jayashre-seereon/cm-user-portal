@@ -667,6 +667,8 @@ const filtered = useMemo(
                   </span>
                 </div>
 
+                {item.comingSoon ? <span className="inline-flex w-fit rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-amber-800">Coming soon</span> : null}
+
                 <div className="mt-auto flex items-center justify-between gap-2 border-t border-[#f0e4e2] pt-3">
                   <span
                     className={`inline-flex items-center gap-1 text-[11px] font-bold ${isActive ? "text-green-700" : "text-gray-400"

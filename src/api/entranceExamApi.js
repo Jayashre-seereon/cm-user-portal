@@ -79,6 +79,7 @@ function mapEntranceExam(item, index) {
     date: formatDate(item?.exam_date),
     issueDate: formatDate(item?.issuedate),
     lastDate: formatDate(item?.lastdate),
+    lastDateRaw: item?.lastdate || null,
     eligibility: item?.eligibility || "Eligibility not available",
     type: formatLabel(item?.stream?.name) || "All",
     category: formatLabel(item?.category?.title) || "General",
