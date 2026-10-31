@@ -31,7 +31,7 @@ export default function FloatingContactActions() {
       <a href={`https://wa.me/${PHONE.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" aria-label="WhatsApp CareerMap" title="WhatsApp" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#25D366] text-2xl text-white shadow-lg transition hover:scale-105 hover:bg-[#1eae53]"><WhatsAppOutlined /></a>
       <button type="button" onClick={() => setOpen(true)} aria-label="Send a message" title="Send a message" className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-xl text-[#9a2119] shadow-lg ring-1 ring-[#f0e4e2] transition hover:scale-105"><MessageOutlined /></button>
     </div>
-    <Modal title="Send us a message" open={open} onCancel={() => setOpen(false)} footer={null} destroyOnHidden>
+    <Modal title="How Can We Help You?" open={open} onCancel={() => setOpen(false)} footer={null} destroyOnHidden>
        <Input.TextArea rows={4} maxLength={5000} showCount value={text} onChange={(event) => setText(event.target.value)} placeholder="Write your message" />
       <div className="mt-4 flex justify-end"><Button type="primary" loading={sending} disabled={!text.trim()} onClick={submit}>How Can We Help You?</Button></div>
     </Modal>
