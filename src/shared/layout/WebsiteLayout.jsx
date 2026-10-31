@@ -3,6 +3,7 @@ import { Outlet } from "react-router-dom";
 import WebsiteFooter from "./WebsiteFooter";
 import WebsiteNavbar from "./WebsiteNavbar";
 import CareerBeeLauncher from "../careerBee/CareerBeeLauncher";
+import FloatingContactActions from "./FloatingContactActions";
 
 const { Content } = Layout;
 
@@ -17,6 +18,7 @@ export default function WebsiteLayout() {
       </Content>
       <WebsiteFooter />
       <CareerBeeLauncher />
+      <FloatingContactActions />
     </Layout>
   );
 }
