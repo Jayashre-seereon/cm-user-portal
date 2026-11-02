@@ -217,6 +217,13 @@ const unlocked =
 
   return (
     <ModuleScreen className="space-y-5 pb-8">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="m-0 text-2xl font-black text-[#9a2119]">Career &amp; Personality Videos</h1>
+          <p className="mt-1 text-sm text-[#8c6c67]">Explore career and personality videos.</p>
+        </div>
+        <PageHero backOnly onBack={goToDashboard} className="shrink-0" />
+      </div>
       {error ? <Alert type="warning" message={error} showIcon style={{ borderRadius: 16 }} /> : null}
 
 <div className="flex flex-wrap items-center gap-2">

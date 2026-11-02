@@ -37,7 +37,7 @@ import {
 } from "../../../api/careerLibraryApi";
 import { Country, State } from "country-state-city";
 import { careerLibrary, palette } from "../../../data/careermapData";
-import { ModuleScreen, Text } from "../../../components/ui";
+import { ModuleScreen, PageHero, Text } from "../../../components/ui";
 import { useAppState } from "../../../state/AppStateContext";
 import {
   PremiumGate,
@@ -1746,9 +1746,9 @@ useEffect(() => {
     }
 
     return (
-      <div key={`detail-${detail?.id ?? index}`} className="space-y-6">
+      <div key={`detail-${detail?.id ?? index}`} className="space-y-4">
         {detail?.media ? (
-          <MediaBanner media={detail.media} title={title} onBack={handleBack} />
+          <MediaBanner media={detail.media} title={title} />
         ) : null}
 
         <div className="flex gap-6 items-start">
@@ -2100,23 +2100,6 @@ className="inline-flex h-10 w-10 items-center justify-center rounded-full border
           {currentLevel !== "details" && (
             <>
               <div className="mb-2 flex items-center gap-3">
-                {currentLevel !== "streams" ? (
-                  <button
-                    type="button"
-                    onClick={handleBack}
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#eedad4] bg-white text-[#1a0a09] shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                  >
-                    <ArrowRightOutlined className="rotate-180" />
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={goToDashboard}
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#eedad4] bg-white text-[#1a0a09] shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                  >
-                    <ArrowRightOutlined className="rotate-180" />
-                  </button>
-                )}
                 <div className="min-w-0">
                   <h1 className="m-0 text-2xl font-black leading-snug text-[#9a2119]">
                     {pageTitle}
@@ -2136,6 +2119,7 @@ className="inline-flex h-10 w-10 items-center justify-center rounded-full border
             </>
           )}
         </div>
+        <PageHero backOnly onBack={currentLevel === "streams" ? goToDashboard : handleBack} className="shrink-0 self-start" />
         {moduleStatus === "preview" &&
           previewRemaining > 0 &&
           currentLevel === "details" && (

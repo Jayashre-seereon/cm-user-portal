@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowRightOutlined,
+  ArrowLeftOutlined,
   CheckCircleFilled,
   ClockCircleOutlined,
   FileDoneOutlined,
@@ -243,8 +244,15 @@ export default function AssessmentLandingPage() {
           {/* Subtle Background Pattern */}
           <div className="pointer-events-none absolute -right-16 -top-16 h-80 w-80 rounded-full bg-white/5 blur-2xl" />
           <div className="pointer-events-none absolute -bottom-16 -left-16 h-80 w-80 rounded-full bg-amber-400/10 blur-2xl" />
+          <Button
+            type="text"
+            aria-label="Back to dashboard"
+            icon={<ArrowLeftOutlined />}
+            onClick={() => navigate("/app/dashboard")}
+            className="!absolute right-6 top-6 !z-20 !flex !h-10 !w-10 !items-center !justify-center !rounded-full !border !border-white/40 !bg-white/10 !p-0 !text-white hover:!bg-white/20 md:right-8 md:top-8"
+          />
 
-          <div className="relative z-10 grid gap-8 lg:grid-cols-12 lg:items-center">
+          <div className="relative z-10 grid gap-8 pt-12 lg:grid-cols-12 lg:items-center">
             <div className="lg:col-span-8">
               <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/15 px-3.5 py-1 text-xs font-bold tracking-wide uppercase text-amber-200 backdrop-blur-md">
                 <SafetyCertificateOutlined /> 7-Domain Evaluation • 1-Plan = 1-Attempt

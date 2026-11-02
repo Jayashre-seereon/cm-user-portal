@@ -249,7 +249,9 @@ const filteredItems = useMemo(() => {
     <ModuleScreen className="space-y-5">
       
 
-      <PageHero backOnly onBack={goToDashboard} />
+      <div className="flex justify-end">
+        <PageHero backOnly onBack={goToDashboard} />
+      </div>
       {error ? <Alert type="warning" message={error} showIcon style={{ borderRadius: 16 }} /> : null}
 <div className="mb-5 flex flex-wrap gap-2">
   {[
