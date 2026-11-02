@@ -14,6 +14,7 @@ import { ModuleScreen, PageHero } from "../../../components/ui";
 import { usePortalNavigation } from "../../portal/components/portalPageShared";
 import { checkModuleAccess } from "../../../api/moduleAccessApi";
 import { Select } from "antd";
+import { useBrowserStepHistory } from "../../../shared/useBrowserStepHistory";
 const { Option } = Select;
 
 const normalizeExamSearch = (value = "") =>
@@ -58,6 +59,9 @@ export default function EntranceExamPage() {
   const [categories, setCategories] = useState([]);
   const [selectedExamId, setSelectedExamId] = useState(""); 
   const [mode, setMode] = useState("");
+  useBrowserStepHistory("entranceExamView", { selectedExam }, ({ selectedExam: previousExam }) => {
+    setSelectedExam(previousExam || null);
+  });
 // LOAD ENTRANCE EXAMS
 
 useEffect(() => {
@@ -318,10 +322,9 @@ const examSections = useMemo(() => {
 if (selectedExam) {
   return (
     <ModuleScreen className="space-y-4">
-      <PageHero
-        backOnly
-        onBack={() => setSelectedExam(null)}
-      />
+      <div className="flex justify-end">
+        <PageHero backOnly onBack={() => window.history.back()} />
+      </div>
 
       <div className="content-stagger grid grid-cols-1 gap-5 lg:grid-cols-[1fr_320px] lg:items-start">
 

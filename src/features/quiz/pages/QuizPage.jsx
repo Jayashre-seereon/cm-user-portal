@@ -23,6 +23,7 @@ import {
   usePortalNavigation,
 } from "../../portal/components/portalPageShared";
 import { useAppState } from "../../../state/AppStateContext";
+import { useBrowserStepHistory } from "../../../shared/useBrowserStepHistory";
 const QUIZ_ICONS = [
   <FileTextOutlined key="file" />,
   <MedicineBoxOutlined key="medicine" />,
@@ -169,6 +170,14 @@ const unlocked =
   const [completed, setCompleted] = useState(false);
   const [result, setResult] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  useBrowserStepHistory("quizView", { activeQuizId }, ({ activeQuizId: previousQuizId }) => {
+    setActiveQuizId(previousQuizId || null);
+    setCurrent(0);
+    setAnswers([]);
+    setCompleted(false);
+    setResult(null);
+    setSubmitting(false);
+  });
 
   useEffect(() => {
     let active = true;
@@ -224,7 +233,10 @@ const unlocked =
   }, [activeQuiz]);
 
   const resetQuiz = () => {
-    setActiveQuizId(null);
+    if (activeQuizId) {
+      window.history.back();
+      return;
+    }
     setCurrent(0);
     setAnswers([]);
     setCompleted(false);
@@ -272,7 +284,9 @@ const unlocked =
 
     return (
       <ModuleScreen maxWidthClass="max-w-sm" className="space-y-6">
-        <PageHero backOnly onBack={resetQuiz} />
+        <div className="flex justify-end">
+          <PageHero backOnly onBack={resetQuiz} />
+        </div>
 
         <div className="px-4 py-12 text-center">
           <div
@@ -315,10 +329,10 @@ const unlocked =
     return (
       <ModuleScreen maxWidthClass="max-w-3xl" className="space-y-5">
         <div className="flex items-center justify-between">
-          <PageHero backOnly onBack={resetQuiz} />
           <span className="text-xs font-semibold text-[#b8837e]">
             {current + 1} / {questions.length}
           </span>
+          <PageHero backOnly onBack={resetQuiz} />
         </div>
 
         <div className="h-[3px] overflow-hidden rounded-full bg-gray-100">

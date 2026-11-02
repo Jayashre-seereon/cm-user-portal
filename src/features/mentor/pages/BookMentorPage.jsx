@@ -14,6 +14,7 @@ import { ModuleScreen, PageHero } from "../../../components/ui";
 import { useAppState } from "../../../state/AppStateContext";
 import { UnlockRedirectModal, usePortalNavigation } from "../../portal/components/portalPageShared";
 import { loadRazorpayScript } from "../../../utils/razorpay.js";
+import { useBrowserStepHistory } from "../../../shared/useBrowserStepHistory";
 
 function formatNumericDate(value) {
   const parsed = new Date(value);
@@ -265,6 +266,15 @@ export default function BookMentorPage() {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [booked, setBooked] = useState(false);
+  useBrowserStepHistory(
+    "mentorView",
+    { selectedMentorId, selectedMentor },
+    (snapshot) => {
+      setSelectedMentorId(snapshot.selectedMentorId || "");
+      setSelectedMentor(snapshot.selectedMentor || null);
+      setShowBookingPanel(false);
+    }
+  );
 
   // ── Filter state ─────────────────────────────────────────────────────────
   const [category, setCategory] = useState("");
@@ -646,7 +656,7 @@ export default function BookMentorPage() {
               Profile, schedule selection, and booking flow.
             </p>
           </div>
-          <PageHero backOnly onBack={() => setSelectedMentorId("")} className="shrink-0" />
+          <PageHero backOnly onBack={() => window.history.back()} className="shrink-0" />
         </div>
 
         {!isModuleUnlocked && !unlocked ? (

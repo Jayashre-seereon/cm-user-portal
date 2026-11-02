@@ -19,6 +19,7 @@ import { ModuleScreen, PageHero } from "../../../components/ui";
 import { useAppState } from "../../../state/AppStateContext";
 import { UnlockRedirectModal, usePortalNavigation } from "../../portal/components/portalPageShared";
 import { checkModuleAccess, startPreview } from "../../../api/moduleAccessApi";
+import { useBrowserStepHistory } from "../../../shared/useBrowserStepHistory";
 
 function scrollToSection(id) {
   const el = document.getElementById(id);
@@ -36,6 +37,9 @@ export default function ScholarshipPage() {
   const [loading, setLoading] = useState(true);
   const [activeStatus, setActiveStatus] = useState("All");
   const [selectedItem, setSelectedItem] = useState(null);
+  useBrowserStepHistory("scholarshipView", { selectedItem }, ({ selectedItem: previousItem }) => {
+    setSelectedItem(previousItem || null);
+  });
   const [unlockModalItem, setUnlockModalItem] = useState(null);
   const accessStatus = pageLocation.state?.accessStatus || "preview";
   const unlocked = accessStatus === "full" || isUnlocked("scholarship");
@@ -333,7 +337,9 @@ const filtered = useMemo(
           </div>
         ) : null}
 
-        <PageHero backOnly onBack={() => setSelectedItem(null)} />
+        <div className="flex justify-end">
+          <PageHero backOnly onBack={() => window.history.back()} />
+        </div>
         {error ? <Alert type="warning" title={error} showIcon style={{ borderRadius: 16 }} /> : null}
 
         <div className="content-stagger grid grid-cols-1 gap-5 lg:grid-cols-[1fr_320px] lg:items-start">
