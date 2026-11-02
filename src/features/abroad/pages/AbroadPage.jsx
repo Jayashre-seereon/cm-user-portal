@@ -15,6 +15,7 @@ import { studyAbroadCountries as fallbackStudyAbroadCountries } from "../../../d
 import { useBrowserStepHistory } from "../../../shared/useBrowserStepHistory";
 import { useAppState } from "../../../state/AppStateContext";
 import { UnlockRedirectModal, usePortalNavigation } from "../../portal/components/portalPageShared";
+import { useScrollToTopOnChange } from "../../../shared/useScrollToTopOnChange";
 
 // Fixed, common to all destinations — shown once on the listing page, not per country
 const INTRO_TEXT =
@@ -237,6 +238,7 @@ export default function AbroadPage() {
   const [countryList, setCountryList] = useState([]);
   const [countriesLoading, setCountriesLoading] = useState(true);
   const [selectedCountry, setSelectedCountry] = useState(null);
+  useScrollToTopOnChange(selectedCountry?.id || selectedCountry?.name || null);
   const [unlockModalItem, setUnlockModalItem] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
   const [submitted, setSubmitted] = useState(false);

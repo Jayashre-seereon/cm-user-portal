@@ -46,6 +46,7 @@ import {
 } from "../../portal/components/portalPageShared";
 import { checkModuleAccess, startPreview, } from "../../../api/moduleAccessApi";
 import { getDashboard } from "../../../api/dashboardApi";
+import { useScrollToTopOnChange } from "../../../shared/useScrollToTopOnChange";
 
 const streamIcons = {
   Science: <ExperimentOutlined />,
@@ -919,6 +920,7 @@ export default function LibraryPage() {
   const { location, goToDashboard, navigate } = usePortalNavigation();
 
   const [currentLevel, setCurrentLevel] = useState("streams");
+  useScrollToTopOnChange(currentLevel);
   const currentLevelRef = useRef(currentLevel);
   currentLevelRef.current = currentLevel;
   const [selectedCountry, setSelectedCountry] = useState("India");

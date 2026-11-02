@@ -15,6 +15,7 @@ import { useAppState } from "../../../state/AppStateContext";
 import { UnlockRedirectModal, usePortalNavigation } from "../../portal/components/portalPageShared";
 import { loadRazorpayScript } from "../../../utils/razorpay.js";
 import { useBrowserStepHistory } from "../../../shared/useBrowserStepHistory";
+import { useScrollToTopOnChange } from "../../../shared/useScrollToTopOnChange";
 
 function formatNumericDate(value) {
   const parsed = new Date(value);
@@ -254,6 +255,7 @@ export default function BookMentorPage() {
   const [mentorList, setMentorList] = useState([]);
   const [mentorListLoading, setMentorListLoading] = useState(true);
   const [selectedMentorId, setSelectedMentorId] = useState("");
+  useScrollToTopOnChange(selectedMentorId);
   const [selectedMentor, setSelectedMentor] = useState(null);
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedSlot, setSelectedSlot] = useState("");

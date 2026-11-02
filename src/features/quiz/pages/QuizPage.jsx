@@ -24,6 +24,7 @@ import {
 } from "../../portal/components/portalPageShared";
 import { useAppState } from "../../../state/AppStateContext";
 import { useBrowserStepHistory } from "../../../shared/useBrowserStepHistory";
+import { useScrollToTopOnChange } from "../../../shared/useScrollToTopOnChange";
 const QUIZ_ICONS = [
   <FileTextOutlined key="file" />,
   <MedicineBoxOutlined key="medicine" />,
@@ -165,6 +166,7 @@ const unlocked =
  const [quizzes, setQuizzes] = useState([]); const [loadError, setLoadError] = useState("");
   const [loading, setLoading] = useState(true);
   const [activeQuizId, setActiveQuizId] = useState(null);
+  useScrollToTopOnChange(activeQuizId);
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState([]);
   const [completed, setCompleted] = useState(false);
