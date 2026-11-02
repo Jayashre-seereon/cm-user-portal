@@ -918,6 +918,8 @@ export default function LibraryPage() {
   const { location, goToDashboard, navigate } = usePortalNavigation();
 
   const [currentLevel, setCurrentLevel] = useState("streams");
+  const currentLevelRef = useRef(currentLevel);
+  currentLevelRef.current = currentLevel;
   const [selectedCountry, setSelectedCountry] = useState("India");
 const [selectedState, setSelectedState] = useState("");
 const [indiaStates, setIndiaStates] = useState([]);
@@ -972,25 +974,23 @@ const [indiaStates, setIndiaStates] = useState([]);
       return;
     }
 
-    const previousSnapshot = window.history.state?.careerArchiveSnapshot;
+    const previousSnapshot =
+      window.history.state?.careerArchiveSnapshot ||
+      window.history.state?.usr?.careerArchiveSnapshot;
     if (JSON.stringify(previousSnapshot) === JSON.stringify(currentSnapshot)) return;
 
-    window.history.pushState(
+    // Keep selection and API updates within a level out of browser history.
+    const replaceCurrentStep = previousSnapshot?.level === currentSnapshot.level;
+    const writeState = replaceCurrentStep ? window.history.replaceState : window.history.pushState;
+    writeState.call(
+      window.history,
       { ...window.history.state, careerArchiveSnapshot: currentSnapshot },
       "",
       window.location.href
     );
-  }, [
-    currentLevel,
-    selectedCountry,
-    selectedState,
-    selectedStream,
-    selectedCategory,
-    selectedSecondCategory,
-    selectedSubCategory,
-    selectedDetailSource,
-    detailReturnLevel,
-  ]);
+  // One browser history entry per visible archive level.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentLevel]);
 
   useEffect(() => {
     const initialSnapshot = {
@@ -1012,8 +1012,14 @@ const [indiaStates, setIndiaStates] = useState([]);
     archiveHistoryReadyRef.current = true;
 
     const restoreArchiveSnapshot = (event) => {
-      const snapshot = event.state?.careerArchiveSnapshot;
+      const snapshot =
+        event.state?.careerArchiveSnapshot ||
+        event.state?.usr?.careerArchiveSnapshot;
       if (!snapshot) return;
+      if (snapshot.level === currentLevelRef.current) {
+        window.history.back();
+        return;
+      }
       skipArchiveHistoryRef.current = true;
       setCurrentLevel(snapshot.level || "streams");
       setSelectedCountry(snapshot.country || "India");
