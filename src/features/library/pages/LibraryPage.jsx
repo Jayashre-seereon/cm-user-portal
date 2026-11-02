@@ -257,6 +257,7 @@ function normalizeCareerPathItems(value) {
         item?.name ||
         `Path ${index + 1}`,
       path: item?.path || (item?.pathtype ? { pathtype: item.pathtype } : null),
+      stream: stripHtml(item?.stream || ""),
       graduation: stripHtml(item?.graduation || ""),
       aftergraduation: stripHtml(item?.aftergraduation || ""),
       afterpostgraduation: stripHtml(item?.afterpostgraduation || ""),
@@ -1949,7 +1950,7 @@ useEffect(() => {
                               {cp?.path?.pathtype || cp?.pathName || `Path ${cpIdx + 1}`}
                             </td>
                             <td className="border-b border-[#f7eeec] px-4 py-3 text-[#62585c]">
-                              {detail?.raw?.stream?.name || "—"}
+                              {cp?.stream || "—"}
                             </td>
                             <td className="border-b border-[#f7eeec] px-4 py-3 text-[#62585c]">{cp?.graduation || "—"}</td>
                             <td className="border-b border-[#f7eeec] px-4 py-3 text-[#62585c]">{cp?.aftergraduation || "—"}</td>
