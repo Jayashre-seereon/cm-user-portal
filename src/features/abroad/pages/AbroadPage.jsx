@@ -233,7 +233,8 @@ export default function AbroadPage() {
   const accessStatus = location.state?.accessStatus || "preview";
   const unlocked = accessStatus === "full" || isUnlocked("abroad-consultancy");
 
-  const [countryList, setCountryList] = useState(fallbackStudyAbroadCountries);
+  const [countryList, setCountryList] = useState([]);
+  const [countriesLoading, setCountriesLoading] = useState(true);
   const [selectedCountry, setSelectedCountry] = useState(null);
   const [unlockModalItem, setUnlockModalItem] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -350,12 +351,14 @@ const [consultForm, setConsultForm] = useState(initialConsultForm);
         setLoadError("");
         const items = await getStudyAbroadCountries();
         if (active) {
-       setCountryList(items.length ? [...items].sort((a, b) => b.id - a.id) : fallbackStudyAbroadCountries); }
+       setCountryList(Array.isArray(items) ? [...items].sort((a, b) => b.id - a.id) : []); }
       } catch (error) {
         if (active) {
           setLoadError(error?.response?.data?.message || error?.message || "Failed to load study abroad destinations.");
-          setCountryList(fallbackStudyAbroadCountries);
+          setCountryList([]);
         }
+      } finally {
+        if (active) setCountriesLoading(false);
       }
     }
 
@@ -2385,7 +2388,9 @@ if (selectedCountry) {
           <p className="text-sm leading-7 text-gray-700">{INTRO_TEXT}</p>
 
           <div className="content-stagger grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {countryList.map((country, index) => {
+            {countriesLoading ? <div className="col-span-full py-8 text-center text-sm text-muted">Loading study abroad destinations...</div> : null}
+            {!countriesLoading && countryList.length === 0 && !loadError ? <div className="col-span-full py-8 text-center text-sm text-muted">No study abroad destinations available right now.</div> : null}
+            {!countriesLoading && countryList.map((country, index) => {
               const isPreviewMode = accessStatus === "preview";
               const isFree = !isPreviewMode || index < 4;
 

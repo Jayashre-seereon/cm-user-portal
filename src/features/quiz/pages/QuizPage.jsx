@@ -161,9 +161,7 @@ const accessStatus = location.state?.accessStatus || "preview";
 const unlocked =
   accessStatus === "full" || isUnlocked("quiz");
   const [unlockModalItem, setUnlockModalItem] = useState(null);
- const [quizzes, setQuizzes] = useState(
-  sortQuizzes(buildFallbackQuizzes())
-); const [loadError, setLoadError] = useState("");
+ const [quizzes, setQuizzes] = useState([]); const [loadError, setLoadError] = useState("");
   const [loading, setLoading] = useState(true);
   const [activeQuizId, setActiveQuizId] = useState(null);
   const [current, setCurrent] = useState(0);
@@ -183,13 +181,13 @@ const unlocked =
 
        if (active) {
   setQuizzes(
-    sortQuizzes(items.length ? items : buildFallbackQuizzes())
+    sortQuizzes(Array.isArray(items) ? items : [])
   );
 }
       } catch (error) {
         if (active) {
           setLoadError(error?.response?.data?.message || error?.message || "Failed to load quizzes.");
-        setQuizzes(sortQuizzes(buildFallbackQuizzes()));
+        setQuizzes([]);
         }
       } finally {
         if (active) {
@@ -410,7 +408,7 @@ const unlocked =
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="m-0 text-2xl font-black tracking-tight text-[#1a0a09]">Choose your quiz</h1>
-          <p className="mt-1 mb-0 text-xs text-[#b8837e]">Quizzes Not Available</p>
+          <p className="mt-1 mb-0 text-xs text-[#b8837e]">{loading ? "Loading quizzes..." : `${quizzes.length} quizzes available`}</p>
         </div>
         <PageHero backOnly onBack={() => navigate(-1)} className="shrink-0" />
       </div>
@@ -422,7 +420,7 @@ const unlocked =
           </div>
         ) : null}
 
-  {quizzes.map((quiz, index) => {
+  {!loading && quizzes.map((quiz, index) => {
   const meta = getQuizMeta(quiz);
 
   const isPreviewMode = accessStatus === "preview";
@@ -512,6 +510,7 @@ const unlocked =
             </div>
           );
         })}
+        {!loading && quizzes.length === 0 && !loadError ? <div className="col-span-full py-8 text-center text-sm text-muted">No quizzes available right now.</div> : null}
       </div>
       <UnlockRedirectModal
   open={Boolean(unlockModalItem)}

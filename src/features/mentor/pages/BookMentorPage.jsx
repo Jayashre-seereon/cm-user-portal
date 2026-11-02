@@ -250,7 +250,8 @@ export default function BookMentorPage() {
   const frontendUnlocked = isUnlocked("book-mentor");
   const unlocked = isModuleUnlocked || frontendUnlocked;
 
-  const [mentorList, setMentorList] = useState(fallbackMentors);
+  const [mentorList, setMentorList] = useState([]);
+  const [mentorListLoading, setMentorListLoading] = useState(true);
   const [selectedMentorId, setSelectedMentorId] = useState("");
   const [selectedMentor, setSelectedMentor] = useState(null);
   const [selectedDate, setSelectedDate] = useState("");
@@ -379,15 +380,17 @@ export default function BookMentorPage() {
         setLoadError("");
         const items = await getMentors();
         if (active) {
-          setMentorList(items.length ? items : fallbackMentors);
+          setMentorList(Array.isArray(items) ? items : []);
         }
       } catch (error) {
         if (active) {
           setLoadError(
             error?.response?.data?.message || error?.message || "Failed to load mentor list."
           );
-          setMentorList(fallbackMentors);
+          setMentorList([]);
         }
+      } finally {
+        if (active) setMentorListLoading(false);
       }
     }
     loadMentors();
@@ -988,8 +991,9 @@ export default function BookMentorPage() {
 </div>
 
       {/* ── Mentor grid ── */}
+      {mentorListLoading ? <div className="py-10 text-center text-gray-500">Loading mentors...</div> : null}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {filteredMentorList.map((mentor, index) => {
+        {!mentorListLoading && filteredMentorList.map((mentor, index) => {
           const mentorFree =
              isModuleUnlocked
               ? true
@@ -1028,7 +1032,7 @@ export default function BookMentorPage() {
         })}
       </div>
 
-      {filteredMentorList.length === 0 ? (
+      {!mentorListLoading && filteredMentorList.length === 0 ? (
         <div className="py-10 text-center text-gray-500">No mentors match these filters</div>
       ) : null}
 

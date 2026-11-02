@@ -13,7 +13,7 @@ import {
 import { AppstoreOutlined } from "@ant-design/icons";
 import { UnlockRedirectModal } from "./portalPageShared.jsx";
 import { checkModuleAccess } from "../../../api/moduleAccessApi";
-export function ExploreModulesSection({ modules = [] }) {
+export function ExploreModulesSection({ modules = [], loading = false }) {
 
 
   const navFunc = useNavigate();
@@ -186,7 +186,11 @@ const sortedCards = [...curatedCards].sort(
           </div>
         </div>
       </div>
-      {curatedCards.length ? (
+      {loading ? (
+        <div className="rounded-[24px] border border-[#e8dbd6] bg-white px-5 py-10 text-center text-sm text-muted shadow-sm">
+          Loading modules...
+        </div>
+      ) : curatedCards.length ? (
         <Row gutter={[14, 14]}>
           {sortedCards.map((card, index) => {
             const effectiveAccessStatus = getEffectiveAccessStatus(card, index);

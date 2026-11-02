@@ -131,6 +131,7 @@ export default function DashboardPage() {
   const [answers, setAnswers] = useState(Array(personalityQuestions.length).fill(null));
   const [complete, setComplete] = useState(false);
   const [dashboardData, setDashboardData] = useState(null);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
   const [error, setError] = useState("");
   const [reviewOpen, setReviewOpen] = useState(false);
   const [profileReminderOpen, setProfileReminderOpen] = useState(false);
@@ -173,6 +174,8 @@ export default function DashboardPage() {
         if (active) {
           setError(loadError?.response?.data?.message || loadError?.message || "Failed to load dashboard.");
         }
+      } finally {
+        if (active) setDashboardLoading(false);
       }
     }
 
@@ -439,7 +442,7 @@ export default function DashboardPage() {
     
 
       <DashboardHeroSection onTestClick={handleTestClick} userName={dashboardUserName} />
-      <ExploreModulesSection modules={dashboardData?.modules || []} />
+      <ExploreModulesSection modules={dashboardData?.modules || []} loading={dashboardLoading} />
 
       <section>
         <div className="mb-4 flex items-center justify-between">
@@ -650,7 +653,9 @@ export default function DashboardPage() {
             See all
           </button>
         </div>
-        {dashboardEntranceExams.length > 0 ? (
+        {dashboardLoading ? (
+          <div className="rounded-[22px] border border-dashed border-[#eaded9] bg-white p-5 text-sm text-muted">Loading entrance exams...</div>
+        ) : dashboardEntranceExams.length > 0 ? (
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
   {dashboardEntranceExams.map((item) => (
     <button
