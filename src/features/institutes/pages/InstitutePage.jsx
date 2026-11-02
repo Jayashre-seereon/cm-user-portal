@@ -66,7 +66,7 @@ export default function InstitutePage() {
 
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [searchResult, setSearchResult] = useState(null);
   const [requestedInstituteId, setRequestedInstituteId] = useState(() =>
     new URLSearchParams(window.location.search).get("instituteId") || ""

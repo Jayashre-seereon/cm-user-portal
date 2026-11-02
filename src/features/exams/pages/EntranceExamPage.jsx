@@ -14,6 +14,7 @@ import { ModuleScreen, PageHero } from "../../../components/ui";
 import { usePortalNavigation } from "../../portal/components/portalPageShared";
 import { checkModuleAccess } from "../../../api/moduleAccessApi";
 import { Select } from "antd";
+import { useBrowserStepHistory } from "../../../shared/useBrowserStepHistory";
 const { Option } = Select;
 
 const normalizeExamSearch = (value = "") =>
@@ -51,12 +52,16 @@ export default function EntranceExamPage() {
   const [unlockModalItem, setUnlockModalItem] = useState(null);
   const [items, setItems] = useState(fallbackEntranceExams);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
   const [moduleMode, setModuleMode] = useState(accessStatus);
  const [selectedExam, setSelectedExam] = useState(null);
   const [category, setCategory] = useState("");
   const [categories, setCategories] = useState([]);
   const [selectedExamId, setSelectedExamId] = useState(""); 
   const [mode, setMode] = useState("");
+  useBrowserStepHistory("entranceExamView", { selectedExam }, ({ selectedExam: previousExam }) => {
+    setSelectedExam(previousExam || null);
+  });
 // LOAD ENTRANCE EXAMS
 
 useEffect(() => {
@@ -71,11 +76,7 @@ useEffect(() => {
       console.log("Entrance Exams API Response:", response);
 
       if (active) {
-        setItems(
-          Array.isArray(response) && response.length > 0
-            ? response
-            : fallbackEntranceExams
-        );
+        setItems(Array.isArray(response) ? response : []);
       }
     } catch (loadError) {
       console.error("Failed to load entrance exams:", loadError);
@@ -87,9 +88,9 @@ useEffect(() => {
           "Failed to load entrance exams."
         );
 
-        // Keep fallback data if API fails
-        setItems(fallbackEntranceExams);
       }
+    } finally {
+      if (active) setLoading(false);
     }
   }
 
@@ -321,10 +322,9 @@ const examSections = useMemo(() => {
 if (selectedExam) {
   return (
     <ModuleScreen className="space-y-4">
-      <PageHero
-        backOnly
-        onBack={() => setSelectedExam(null)}
-      />
+      <div className="flex justify-end">
+        <PageHero backOnly onBack={() => window.history.back()} />
+      </div>
 
       <div className="content-stagger grid grid-cols-1 gap-5 lg:grid-cols-[1fr_320px] lg:items-start">
 
@@ -544,8 +544,9 @@ if (selectedExam) {
   ) : null}
 </div>
 
+        {loading ? <div className="py-10 text-center text-gray-500">Loading entrance exams...</div> : null}
         <div className="content-stagger grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {filtered.map((item, index) => {
+          {!loading && filtered.map((item, index) => {
             const isPreviewMode = moduleMode === "preview";
             const isFree = !isPreviewMode || index < 4;
 
@@ -631,7 +632,7 @@ if (selectedExam) {
           })}
         </div>
 
-        {filtered.length === 0 ? (
+        {!loading && filtered.length === 0 ? (
           <div className="py-10 text-center text-gray-500">No results found</div>
         ) : null}
       </ModuleScreen>

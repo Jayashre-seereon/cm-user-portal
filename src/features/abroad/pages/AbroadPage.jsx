@@ -12,6 +12,7 @@ import {
 import { ModuleScreen, PageHero } from "../../../components/ui";
 import { createStudyAbroadConsultation, getStudyAbroadCountries } from "../../../api/studyabroadApi";
 import { studyAbroadCountries as fallbackStudyAbroadCountries } from "../../../data/careermapData";
+import { useBrowserStepHistory } from "../../../shared/useBrowserStepHistory";
 import { useAppState } from "../../../state/AppStateContext";
 import { UnlockRedirectModal, usePortalNavigation } from "../../portal/components/portalPageShared";
 
@@ -233,7 +234,8 @@ export default function AbroadPage() {
   const accessStatus = location.state?.accessStatus || "preview";
   const unlocked = accessStatus === "full" || isUnlocked("abroad-consultancy");
 
-  const [countryList, setCountryList] = useState(fallbackStudyAbroadCountries);
+  const [countryList, setCountryList] = useState([]);
+  const [countriesLoading, setCountriesLoading] = useState(true);
   const [selectedCountry, setSelectedCountry] = useState(null);
   const [unlockModalItem, setUnlockModalItem] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -325,6 +327,20 @@ const updateConsultField = (name, value) => {
 
 
 const [consultForm, setConsultForm] = useState(initialConsultForm);
+useBrowserStepHistory(
+  "studyAbroadView",
+  { selectedCountry, formOpen, submitted },
+  (snapshot) => {
+    setSelectedCountry(snapshot.selectedCountry || null);
+    setFormOpen(Boolean(snapshot.formOpen));
+    setSubmitted(Boolean(snapshot.submitted));
+  }
+);
+
+function closeConsultForm() {
+  setSubmitError("");
+  window.history.back();
+}
 
 
 
@@ -350,12 +366,14 @@ const [consultForm, setConsultForm] = useState(initialConsultForm);
         setLoadError("");
         const items = await getStudyAbroadCountries();
         if (active) {
-       setCountryList(items.length ? [...items].sort((a, b) => b.id - a.id) : fallbackStudyAbroadCountries); }
+       setCountryList(Array.isArray(items) ? [...items].sort((a, b) => b.id - a.id) : []); }
       } catch (error) {
         if (active) {
           setLoadError(error?.response?.data?.message || error?.message || "Failed to load study abroad destinations.");
-          setCountryList(fallbackStudyAbroadCountries);
+          setCountryList([]);
         }
+      } finally {
+        if (active) setCountriesLoading(false);
       }
     }
 
@@ -398,7 +416,9 @@ const [consultForm, setConsultForm] = useState(initialConsultForm);
   if (submitted && activeCountry) {
     return (
       <ModuleScreen className="space-y-6">
-        <PageHero backOnly onBack={() => setSubmitted(false)} />
+        <div className="flex justify-end">
+          <PageHero backOnly onBack={() => window.history.back()} />
+        </div>
         <div className="motion-item rounded-[28px] border border-[#f0e4e2] bg-white p-8 text-center shadow-sm">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#fdf0ee] text-xl text-[#9a2119]">
             <CheckCircleOutlined />
@@ -427,10 +447,9 @@ if (selectedCountry) {
   return (
     <ModuleScreen className="space-y-6  pb-28">
       {/* Back */}
-      <PageHero
-        backOnly
-        onBack={() => setSelectedCountry(null)}
-      />
+      <div className="flex justify-end">
+        <PageHero backOnly onBack={() => window.history.back()} />
+      </div>
 
       {/* Hero */}
       <div className="overflow-hidden rounded-[30px] border border-[#f0e4e2] bg-white shadow-sm">
@@ -639,10 +658,7 @@ if (selectedCountry) {
 
           <button
             type="button"
-            onClick={() => {
-              setFormOpen(false);
-              setSubmitError("");
-            }}
+            onClick={closeConsultForm}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-lg text-gray-500 transition hover:bg-[#fdf0ee] hover:text-[#9a2119]"
           >
             ×
@@ -2069,10 +2085,7 @@ if (selectedCountry) {
 
           <button
             type="button"
-            onClick={() => {
-              setFormOpen(false);
-              setSubmitError("");
-            }}
+            onClick={closeConsultForm}
             className="rounded-xl border border-[#ead9d5] px-6 py-3 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
           >
             Cancel
@@ -2385,7 +2398,9 @@ if (selectedCountry) {
           <p className="text-sm leading-7 text-gray-700">{INTRO_TEXT}</p>
 
           <div className="content-stagger grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {countryList.map((country, index) => {
+            {countriesLoading ? <div className="col-span-full py-8 text-center text-sm text-muted">Loading study abroad destinations...</div> : null}
+            {!countriesLoading && countryList.length === 0 && !loadError ? <div className="col-span-full py-8 text-center text-sm text-muted">No study abroad destinations available right now.</div> : null}
+            {!countriesLoading && countryList.map((country, index) => {
               const isPreviewMode = accessStatus === "preview";
               const isFree = !isPreviewMode || index < 4;
 

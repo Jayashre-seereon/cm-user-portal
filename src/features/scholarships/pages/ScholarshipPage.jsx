@@ -19,6 +19,7 @@ import { ModuleScreen, PageHero } from "../../../components/ui";
 import { useAppState } from "../../../state/AppStateContext";
 import { UnlockRedirectModal, usePortalNavigation } from "../../portal/components/portalPageShared";
 import { checkModuleAccess, startPreview } from "../../../api/moduleAccessApi";
+import { useBrowserStepHistory } from "../../../shared/useBrowserStepHistory";
 
 function scrollToSection(id) {
   const el = document.getElementById(id);
@@ -33,8 +34,12 @@ export default function ScholarshipPage() {
   const [params] = useSearchParams();
   const [items, setItems] = useState(fallbackScholarships);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
   const [activeStatus, setActiveStatus] = useState("All");
   const [selectedItem, setSelectedItem] = useState(null);
+  useBrowserStepHistory("scholarshipView", { selectedItem }, ({ selectedItem: previousItem }) => {
+    setSelectedItem(previousItem || null);
+  });
   const [unlockModalItem, setUnlockModalItem] = useState(null);
   const accessStatus = pageLocation.state?.accessStatus || "preview";
   const unlocked = accessStatus === "full" || isUnlocked("scholarship");
@@ -85,13 +90,15 @@ useEffect(() => {
       try {
         setError("");
         const response = await getScholarships();
-        if (active && response.length) {
-          setItems(response);
+        if (active) {
+          setItems(Array.isArray(response) ? response : []);
         }
       } catch (loadError) {
         if (active) {
           setError(loadError?.response?.data?.message || loadError?.message || "Failed to load scholarships.");
         }
+      } finally {
+        if (active) setLoading(false);
       }
     }
 
@@ -330,7 +337,9 @@ const filtered = useMemo(
           </div>
         ) : null}
 
-        <PageHero backOnly onBack={() => setSelectedItem(null)} />
+        <div className="flex justify-end">
+          <PageHero backOnly onBack={() => window.history.back()} />
+        </div>
         {error ? <Alert type="warning" title={error} showIcon style={{ borderRadius: 16 }} /> : null}
 
         <div className="content-stagger grid grid-cols-1 gap-5 lg:grid-cols-[1fr_320px] lg:items-start">
@@ -628,8 +637,9 @@ const filtered = useMemo(
   </button>
 ) : null}
 
+      {loading ? <div className="py-10 text-center text-gray-500">Loading scholarships...</div> : null}
       <div className="content-stagger grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {filtered.map((item) => {
+        {!loading && filtered.map((item) => {
           const isActive = item.status === "Active";
           const isLocked = isScholarshipLocked(item);
 
@@ -687,7 +697,7 @@ const filtered = useMemo(
         })}
       </div>
 
-      {filtered.length === 0 ? (
+      {!loading && filtered.length === 0 ? (
         <div className="py-10 text-center text-gray-500">No scholarships match these filters</div>
       ) : null}
 

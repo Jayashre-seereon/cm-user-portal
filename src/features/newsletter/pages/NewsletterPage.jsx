@@ -119,6 +119,7 @@ export default function NewsletterPage() {
   const [moduleMode, setModuleMode] = useState(() => normalizeMode(initialAccessStatus));
   const [previewLimit, setPreviewLimit] = useState(4);
   const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [previewRemaining, setPreviewRemaining] = useState(0);
   const [previewExpired, setPreviewExpired] = useState(false);
@@ -140,6 +141,8 @@ export default function NewsletterPage() {
     if (active) {
       setError(err?.response?.data?.message || err?.message || "Failed to load career insights.");
     }
+  } finally {
+    if (active) setLoading(false);
   }
 }
 
@@ -246,7 +249,9 @@ const filteredItems = useMemo(() => {
     <ModuleScreen className="space-y-5">
       
 
-      <PageHero backOnly onBack={goToDashboard} />
+      <div className="flex justify-end">
+        <PageHero backOnly onBack={goToDashboard} />
+      </div>
       {error ? <Alert type="warning" message={error} showIcon style={{ borderRadius: 16 }} /> : null}
 <div className="mb-5 flex flex-wrap gap-2">
   {[
@@ -280,6 +285,8 @@ const filteredItems = useMemo(() => {
               <NewsletterCard item={item} canView={isItemUnlocked(index)} />
             </button>
           ))
+        ) : loading ? (
+          <div className="col-span-full py-8 text-center text-sm text-muted">Loading career insights...</div>
         ) : !error ? (
           <Empty description="No career insights available right now." />
         ) : null}

@@ -23,6 +23,7 @@ import {
   usePortalNavigation,
 } from "../../portal/components/portalPageShared";
 import { useAppState } from "../../../state/AppStateContext";
+import { useBrowserStepHistory } from "../../../shared/useBrowserStepHistory";
 const QUIZ_ICONS = [
   <FileTextOutlined key="file" />,
   <MedicineBoxOutlined key="medicine" />,
@@ -161,9 +162,7 @@ const accessStatus = location.state?.accessStatus || "preview";
 const unlocked =
   accessStatus === "full" || isUnlocked("quiz");
   const [unlockModalItem, setUnlockModalItem] = useState(null);
- const [quizzes, setQuizzes] = useState(
-  sortQuizzes(buildFallbackQuizzes())
-); const [loadError, setLoadError] = useState("");
+ const [quizzes, setQuizzes] = useState([]); const [loadError, setLoadError] = useState("");
   const [loading, setLoading] = useState(true);
   const [activeQuizId, setActiveQuizId] = useState(null);
   const [current, setCurrent] = useState(0);
@@ -171,6 +170,14 @@ const unlocked =
   const [completed, setCompleted] = useState(false);
   const [result, setResult] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  useBrowserStepHistory("quizView", { activeQuizId }, ({ activeQuizId: previousQuizId }) => {
+    setActiveQuizId(previousQuizId || null);
+    setCurrent(0);
+    setAnswers([]);
+    setCompleted(false);
+    setResult(null);
+    setSubmitting(false);
+  });
 
   useEffect(() => {
     let active = true;
@@ -183,13 +190,13 @@ const unlocked =
 
        if (active) {
   setQuizzes(
-    sortQuizzes(items.length ? items : buildFallbackQuizzes())
+    sortQuizzes(Array.isArray(items) ? items : [])
   );
 }
       } catch (error) {
         if (active) {
           setLoadError(error?.response?.data?.message || error?.message || "Failed to load quizzes.");
-        setQuizzes(sortQuizzes(buildFallbackQuizzes()));
+        setQuizzes([]);
         }
       } finally {
         if (active) {
@@ -226,7 +233,10 @@ const unlocked =
   }, [activeQuiz]);
 
   const resetQuiz = () => {
-    setActiveQuizId(null);
+    if (activeQuizId) {
+      window.history.back();
+      return;
+    }
     setCurrent(0);
     setAnswers([]);
     setCompleted(false);
@@ -274,7 +284,9 @@ const unlocked =
 
     return (
       <ModuleScreen maxWidthClass="max-w-sm" className="space-y-6">
-        <PageHero backOnly onBack={resetQuiz} />
+        <div className="flex justify-end">
+          <PageHero backOnly onBack={resetQuiz} />
+        </div>
 
         <div className="px-4 py-12 text-center">
           <div
@@ -317,10 +329,10 @@ const unlocked =
     return (
       <ModuleScreen maxWidthClass="max-w-3xl" className="space-y-5">
         <div className="flex items-center justify-between">
-          <PageHero backOnly onBack={resetQuiz} />
           <span className="text-xs font-semibold text-[#b8837e]">
             {current + 1} / {questions.length}
           </span>
+          <PageHero backOnly onBack={resetQuiz} />
         </div>
 
         <div className="h-[3px] overflow-hidden rounded-full bg-gray-100">
@@ -410,7 +422,7 @@ const unlocked =
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="m-0 text-2xl font-black tracking-tight text-[#1a0a09]">Choose your quiz</h1>
-          <p className="mt-1 mb-0 text-xs text-[#b8837e]">Quizzes Not Available</p>
+          <p className="mt-1 mb-0 text-xs text-[#b8837e]">{loading ? "Loading quizzes..." : `${quizzes.length} quizzes available`}</p>
         </div>
         <PageHero backOnly onBack={() => navigate(-1)} className="shrink-0" />
       </div>
@@ -422,7 +434,7 @@ const unlocked =
           </div>
         ) : null}
 
-  {quizzes.map((quiz, index) => {
+  {!loading && quizzes.map((quiz, index) => {
   const meta = getQuizMeta(quiz);
 
   const isPreviewMode = accessStatus === "preview";
@@ -512,6 +524,7 @@ const unlocked =
             </div>
           );
         })}
+        {!loading && quizzes.length === 0 && !loadError ? <div className="col-span-full py-8 text-center text-sm text-muted">No quizzes available right now.</div> : null}
       </div>
       <UnlockRedirectModal
   open={Boolean(unlockModalItem)}

@@ -131,7 +131,8 @@ const accessStatus =
 
 const unlocked =
   accessStatus === "unlocked";
-  const [items, setItems] = useState(fallbackMasterClasses);
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [videoType, setVideoType] = useState("All");
   const [sortBy, setSortBy] = useState("newest");
@@ -146,14 +147,16 @@ const unlocked =
         const response = await getMasterClasses(
   MASTERCLASS_MODULE_ID
 );
-        if (active && response.length) {
-          setItems(response);
+        if (active) {
+          setItems(Array.isArray(response) ? response : []);
         }
       } catch (loadError) {
         if (active) {
           setError(loadError?.response?.data?.message || loadError?.message || "Failed to load career & personality videos.");
-          setItems(fallbackMasterClasses);
+          setItems([]);
         }
+      } finally {
+        if (active) setLoading(false);
       }
     }
 
@@ -214,6 +217,13 @@ const unlocked =
 
   return (
     <ModuleScreen className="space-y-5 pb-8">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="m-0 text-2xl font-black text-[#9a2119]">Career &amp; Personality Videos</h1>
+          <p className="mt-1 text-sm text-[#8c6c67]">Explore career and personality videos.</p>
+        </div>
+        <PageHero backOnly onBack={goToDashboard} className="shrink-0" />
+      </div>
       {error ? <Alert type="warning" message={error} showIcon style={{ borderRadius: 16 }} /> : null}
 
 <div className="flex flex-wrap items-center gap-2">
@@ -256,13 +266,14 @@ const unlocked =
 
 
       <div className="grid w-full grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {filtered.length === 0 ? (
+        {loading ? <div className="col-span-full py-8 text-center text-sm text-muted">Loading career &amp; personality videos...</div> : null}
+        {!loading && filtered.length === 0 ? (
           <div className="rounded-[24px] border border-[#f0e4e2] bg-white p-5 text-sm text-muted">
             No career & personality videos available right now.
           </div>
         ) : null}
 
-        {filtered.map((item) => {
+        {!loading && filtered.map((item) => {
   const detailUnlocked =
   unlocked ||
   item.isFree;
