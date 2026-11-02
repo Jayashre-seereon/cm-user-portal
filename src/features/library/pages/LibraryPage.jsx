@@ -45,6 +45,8 @@ import {
   usePortalNavigation,
 } from "../../portal/components/portalPageShared";
 import { checkModuleAccess, startPreview, } from "../../../api/moduleAccessApi";
+import { getDashboard } from "../../../api/dashboardApi";
+import { useScrollToTopOnChange } from "../../../shared/useScrollToTopOnChange";
 
 const streamIcons = {
   Science: <ExperimentOutlined />,
@@ -913,11 +915,14 @@ function InstituteCard({ inst, badge }) {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function LibraryPage() {
-  const { isUnlocked, registerFreeDetailAccess, savedCareers, toggleSavedCareer } =
+  const { isUnlocked, registerFreeDetailAccess, savedCareers, toggleSavedCareer, dashboardData } =
     useAppState();
   const { location, goToDashboard, navigate } = usePortalNavigation();
 
   const [currentLevel, setCurrentLevel] = useState("streams");
+  useScrollToTopOnChange(currentLevel);
+  const currentLevelRef = useRef(currentLevel);
+  currentLevelRef.current = currentLevel;
   const [selectedCountry, setSelectedCountry] = useState("India");
 const [selectedState, setSelectedState] = useState("");
 const [indiaStates, setIndiaStates] = useState([]);
@@ -943,7 +948,16 @@ const [indiaStates, setIndiaStates] = useState([]);
   const pageLocation = useLocation();
   const accessStatus = pageLocation.state?.accessStatus || "preview";
   const [moduleStatus, setModuleStatus] = useState(accessStatus);
-  const CAREER_LIBRARY_MODULE_ID = pageLocation.state?.moduleId;
+  const [resolvedCareerModuleId, setResolvedCareerModuleId] = useState(null);
+  const CAREER_LIBRARY_MODULE_ID =
+    pageLocation.state?.moduleId ||
+    pageLocation.state?.searchItem?.moduleId ||
+    dashboardData?.modules?.find((module) =>
+      ["career archive", "career library"].includes(
+        String(module?.title || "").trim().toLowerCase().replace(/\s+/g, " ")
+      )
+    )?.id ||
+    resolvedCareerModuleId;
 
   const [previewSessionId, setPreviewSessionId] = useState(null);
 
@@ -951,6 +965,25 @@ const [indiaStates, setIndiaStates] = useState([]);
 
   const [previewExpired, setPreviewExpired] = useState(false);
   const hasSubscriptionAccess = accessStatus === "unlocked";
+
+  useEffect(() => {
+    if (CAREER_LIBRARY_MODULE_ID) return;
+
+    let active = true;
+    getDashboard()
+      .then((response) => {
+        const modules = response?.data?.modules || response?.modules || [];
+        const careerModule = modules.find((module) =>
+          ["career archive", "career library"].includes(
+            String(module?.title || "").trim().toLowerCase().replace(/\s+/g, " ")
+          )
+        );
+        if (active && careerModule?.id) setResolvedCareerModuleId(careerModule.id);
+      })
+      .catch((err) => console.warn("Unable to resolve Career Archive module:", err));
+
+    return () => { active = false; };
+  }, [CAREER_LIBRARY_MODULE_ID]);
 
   useEffect(() => {
     if (!archiveHistoryReadyRef.current) return;
@@ -972,25 +1005,23 @@ const [indiaStates, setIndiaStates] = useState([]);
       return;
     }
 
-    const previousSnapshot = window.history.state?.careerArchiveSnapshot;
+    const previousSnapshot =
+      window.history.state?.careerArchiveSnapshot ||
+      window.history.state?.usr?.careerArchiveSnapshot;
     if (JSON.stringify(previousSnapshot) === JSON.stringify(currentSnapshot)) return;
 
-    window.history.pushState(
+    // Keep selection and API updates within a level out of browser history.
+    const replaceCurrentStep = previousSnapshot?.level === currentSnapshot.level;
+    const writeState = replaceCurrentStep ? window.history.replaceState : window.history.pushState;
+    writeState.call(
+      window.history,
       { ...window.history.state, careerArchiveSnapshot: currentSnapshot },
       "",
       window.location.href
     );
-  }, [
-    currentLevel,
-    selectedCountry,
-    selectedState,
-    selectedStream,
-    selectedCategory,
-    selectedSecondCategory,
-    selectedSubCategory,
-    selectedDetailSource,
-    detailReturnLevel,
-  ]);
+  // One browser history entry per visible archive level.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentLevel]);
 
   useEffect(() => {
     const initialSnapshot = {
@@ -1012,8 +1043,14 @@ const [indiaStates, setIndiaStates] = useState([]);
     archiveHistoryReadyRef.current = true;
 
     const restoreArchiveSnapshot = (event) => {
-      const snapshot = event.state?.careerArchiveSnapshot;
+      const snapshot =
+        event.state?.careerArchiveSnapshot ||
+        event.state?.usr?.careerArchiveSnapshot;
       if (!snapshot) return;
+      if (snapshot.level === currentLevelRef.current) {
+        window.history.back();
+        return;
+      }
       skipArchiveHistoryRef.current = true;
       setCurrentLevel(snapshot.level || "streams");
       setSelectedCountry(snapshot.country || "India");
@@ -1097,6 +1134,7 @@ useEffect(() => {
 
   useEffect(() => {
     async function loadAccess() {
+      if (!CAREER_LIBRARY_MODULE_ID) return;
       try {
         const result = await checkModuleAccess(
           CAREER_LIBRARY_MODULE_ID
@@ -1115,7 +1153,7 @@ useEffect(() => {
     }
 
     loadAccess();
-  }, []);
+  }, [CAREER_LIBRARY_MODULE_ID]);
 
   // Handle deep-linking from Global Search or direct URL params
   useEffect(() => {
@@ -1142,6 +1180,7 @@ useEffect(() => {
     const secondCategoryId = searchParams.get("secondCategoryId") || searchItem?.secondCategoryId || "";
 
     if (!type && !id && !title) return;
+    if (!CAREER_LIBRARY_MODULE_ID) return;
 
     let active = true;
 
@@ -1290,7 +1329,7 @@ useEffect(() => {
     return () => {
       active = false;
     };
-  }, [pageLocation.search, pageLocation.state]);
+  }, [pageLocation.search, pageLocation.state, CAREER_LIBRARY_MODULE_ID]);
 
   const detailUnlocked = hasSubscriptionAccess || moduleStatus !== "locked";
 
@@ -1562,6 +1601,11 @@ useEffect(() => {
   }
   async function createPreviewSession(pageType, pageId, item) {
     if (moduleStatus !== "preview") {
+      return null;
+    }
+
+    if (!CAREER_LIBRARY_MODULE_ID || !pageType || pageId == null || pageId === "") {
+      setError("Unable to start preview because Career Archive details are missing. Please reopen this item from search.");
       return null;
     }
 

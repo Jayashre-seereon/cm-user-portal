@@ -17,6 +17,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { globalSearch } from "../../api/searchApi";
 import { resolveNavigationTarget } from "../../utils/searchNavigation";
+import { useAppState } from "../../state/AppStateContext";
 
 const CATEGORY_TABS = [
   { key: "all", label: "All", groupKey: null },
@@ -154,6 +155,7 @@ function ItemThumbnail({ item, config }) {
 
 export default function GlobalSearchBar({ className = "" }) {
   const navigate = useNavigate();
+  const { dashboardData } = useAppState();
   const containerRef = useRef(null);
   const inputRef = useRef(null);
   const abortControllerRef = useRef(null);
@@ -317,7 +319,20 @@ export default function GlobalSearchBar({ className = "" }) {
     if (/^https?:\/\//i.test(targetUrl)) {
       window.location.href = targetUrl;
     } else {
-      navigate(targetUrl, { state: { searchItem: item } });
+      const isCareerArchiveTarget = targetUrl.startsWith("/app/library");
+      const careerArchiveModule = dashboardData?.modules?.find((module) =>
+        ["career archive", "career library"].includes(
+          String(module?.title || "").trim().toLowerCase().replace(/\s+/g, " ")
+        )
+      );
+      navigate(targetUrl, {
+        state: {
+          searchItem: item,
+          ...(isCareerArchiveTarget && careerArchiveModule?.id
+            ? { moduleId: careerArchiveModule.id }
+            : {}),
+        },
+      });
     }
   }
 

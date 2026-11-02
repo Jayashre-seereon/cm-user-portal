@@ -15,6 +15,7 @@ import { usePortalNavigation } from "../../portal/components/portalPageShared";
 import { checkModuleAccess } from "../../../api/moduleAccessApi";
 import { Select } from "antd";
 import { useBrowserStepHistory } from "../../../shared/useBrowserStepHistory";
+import { useScrollToTopOnChange } from "../../../shared/useScrollToTopOnChange";
 const { Option } = Select;
 
 const normalizeExamSearch = (value = "") =>
@@ -55,6 +56,7 @@ export default function EntranceExamPage() {
   const [loading, setLoading] = useState(true);
   const [moduleMode, setModuleMode] = useState(accessStatus);
  const [selectedExam, setSelectedExam] = useState(null);
+  useScrollToTopOnChange(selectedExam?.id || null);
   const [category, setCategory] = useState("");
   const [categories, setCategories] = useState([]);
   const [selectedExamId, setSelectedExamId] = useState(""); 

@@ -20,6 +20,7 @@ import { useAppState } from "../../../state/AppStateContext";
 import { UnlockRedirectModal, usePortalNavigation } from "../../portal/components/portalPageShared";
 import { checkModuleAccess, startPreview } from "../../../api/moduleAccessApi";
 import { useBrowserStepHistory } from "../../../shared/useBrowserStepHistory";
+import { useScrollToTopOnChange } from "../../../shared/useScrollToTopOnChange";
 
 function scrollToSection(id) {
   const el = document.getElementById(id);
@@ -37,6 +38,7 @@ export default function ScholarshipPage() {
   const [loading, setLoading] = useState(true);
   const [activeStatus, setActiveStatus] = useState("All");
   const [selectedItem, setSelectedItem] = useState(null);
+  useScrollToTopOnChange(selectedItem?.id || null);
   useBrowserStepHistory("scholarshipView", { selectedItem }, ({ selectedItem: previousItem }) => {
     setSelectedItem(previousItem || null);
   });
