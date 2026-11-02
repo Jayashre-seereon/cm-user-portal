@@ -26,7 +26,7 @@ import {
   CheckCircleOutlined,
 } from "@ant-design/icons";
 
-import { useEffect, useMemo, useState, useContext } from "react";
+import { useEffect, useMemo, useRef, useState, useContext } from "react";
 import { useLocation } from "react-router-dom";
 import { Empty } from "antd";
 import {
@@ -926,6 +926,8 @@ const [indiaStates, setIndiaStates] = useState([]);
   const [selectedSecondCategory, setSelectedSecondCategory] = useState(null);
   const [selectedSubCategory, setSelectedSubCategory] = useState(null);
   const [selectedDetailSource, setSelectedDetailSource] = useState(null);
+  const skipArchiveHistoryRef = useRef(false);
+  const archiveHistoryReadyRef = useRef(false);
 
   const [streamItems, setStreamItems] = useState(normalizeStreamItems([]));
   const [categories, setCategories] = useState([]);
@@ -949,6 +951,86 @@ const [indiaStates, setIndiaStates] = useState([]);
 
   const [previewExpired, setPreviewExpired] = useState(false);
   const hasSubscriptionAccess = accessStatus === "unlocked";
+
+  useEffect(() => {
+    if (!archiveHistoryReadyRef.current) return;
+    const makeSnapshot = () => ({
+      level: currentLevel,
+      country: selectedCountry,
+      state: selectedState,
+      stream: selectedStream,
+      category: selectedCategory,
+      secondCategory: selectedSecondCategory,
+      subCategory: selectedSubCategory,
+      detailSource: selectedDetailSource,
+      detailReturnLevel,
+    });
+    const currentSnapshot = makeSnapshot();
+
+    if (skipArchiveHistoryRef.current) {
+      skipArchiveHistoryRef.current = false;
+      return;
+    }
+
+    const previousSnapshot = window.history.state?.careerArchiveSnapshot;
+    if (JSON.stringify(previousSnapshot) === JSON.stringify(currentSnapshot)) return;
+
+    window.history.pushState(
+      { ...window.history.state, careerArchiveSnapshot: currentSnapshot },
+      "",
+      window.location.href
+    );
+  }, [
+    currentLevel,
+    selectedCountry,
+    selectedState,
+    selectedStream,
+    selectedCategory,
+    selectedSecondCategory,
+    selectedSubCategory,
+    selectedDetailSource,
+    detailReturnLevel,
+  ]);
+
+  useEffect(() => {
+    const initialSnapshot = {
+      level: currentLevel,
+      country: selectedCountry,
+      state: selectedState,
+      stream: selectedStream,
+      category: selectedCategory,
+      secondCategory: selectedSecondCategory,
+      subCategory: selectedSubCategory,
+      detailSource: selectedDetailSource,
+      detailReturnLevel,
+    };
+    window.history.replaceState(
+      { ...window.history.state, careerArchiveSnapshot: initialSnapshot },
+      "",
+      window.location.href
+    );
+    archiveHistoryReadyRef.current = true;
+
+    const restoreArchiveSnapshot = (event) => {
+      const snapshot = event.state?.careerArchiveSnapshot;
+      if (!snapshot) return;
+      skipArchiveHistoryRef.current = true;
+      setCurrentLevel(snapshot.level || "streams");
+      setSelectedCountry(snapshot.country || "India");
+      setSelectedState(snapshot.state || "");
+      setSelectedStream(snapshot.stream || null);
+      setSelectedCategory(snapshot.category || null);
+      setSelectedSecondCategory(snapshot.secondCategory || null);
+      setSelectedSubCategory(snapshot.subCategory || null);
+      setSelectedDetailSource(snapshot.detailSource || null);
+      setDetailReturnLevel(snapshot.detailReturnLevel || "streams");
+    };
+
+    window.addEventListener("popstate", restoreArchiveSnapshot);
+    return () => window.removeEventListener("popstate", restoreArchiveSnapshot);
+  // The initial entry is replaced once; later snapshots are pushed by the effect above.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 useEffect(() => {
 
   if (selectedCountry === "India") {
@@ -1506,34 +1588,12 @@ useEffect(() => {
   }
 
   function handleBack() {
-    if (currentLevel === "details") {
-      if (!hasSubscriptionAccess) {
-        setModuleStatus("locked");
-      }
-      setCurrentLevel(detailReturnLevel);
-      setSelectedDetailSource(null);
+    if (currentLevel === "streams") {
+      goToDashboard();
       return;
     }
-
-    if (currentLevel === "subcategory") {
-      setCurrentLevel("secondcategory");
-      setSelectedSubCategory(null);
-      return;
-    }
-
-    if (currentLevel === "secondcategory") {
-      setCurrentLevel("categories");
-      setSelectedSecondCategory(null);
-      return;
-    }
-
-    if (currentLevel === "categories") {
-      setCurrentLevel("streams");
-      setSelectedCategory(null);
-      return;
-    }
-
-    goToDashboard();
+    if (currentLevel === "details" && !hasSubscriptionAccess) setModuleStatus("locked");
+    window.history.back();
   }
 
   // function handleLockedCareerClick(item, type) {
