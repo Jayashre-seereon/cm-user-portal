@@ -45,6 +45,7 @@ import {
   usePortalNavigation,
 } from "../../portal/components/portalPageShared";
 import { checkModuleAccess, startPreview, } from "../../../api/moduleAccessApi";
+import { getDashboard } from "../../../api/dashboardApi";
 
 const streamIcons = {
   Science: <ExperimentOutlined />,
@@ -913,7 +914,7 @@ function InstituteCard({ inst, badge }) {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function LibraryPage() {
-  const { isUnlocked, registerFreeDetailAccess, savedCareers, toggleSavedCareer } =
+  const { isUnlocked, registerFreeDetailAccess, savedCareers, toggleSavedCareer, dashboardData } =
     useAppState();
   const { location, goToDashboard, navigate } = usePortalNavigation();
 
@@ -945,7 +946,16 @@ const [indiaStates, setIndiaStates] = useState([]);
   const pageLocation = useLocation();
   const accessStatus = pageLocation.state?.accessStatus || "preview";
   const [moduleStatus, setModuleStatus] = useState(accessStatus);
-  const CAREER_LIBRARY_MODULE_ID = pageLocation.state?.moduleId;
+  const [resolvedCareerModuleId, setResolvedCareerModuleId] = useState(null);
+  const CAREER_LIBRARY_MODULE_ID =
+    pageLocation.state?.moduleId ||
+    pageLocation.state?.searchItem?.moduleId ||
+    dashboardData?.modules?.find((module) =>
+      ["career archive", "career library"].includes(
+        String(module?.title || "").trim().toLowerCase().replace(/\s+/g, " ")
+      )
+    )?.id ||
+    resolvedCareerModuleId;
 
   const [previewSessionId, setPreviewSessionId] = useState(null);
 
@@ -953,6 +963,25 @@ const [indiaStates, setIndiaStates] = useState([]);
 
   const [previewExpired, setPreviewExpired] = useState(false);
   const hasSubscriptionAccess = accessStatus === "unlocked";
+
+  useEffect(() => {
+    if (CAREER_LIBRARY_MODULE_ID) return;
+
+    let active = true;
+    getDashboard()
+      .then((response) => {
+        const modules = response?.data?.modules || response?.modules || [];
+        const careerModule = modules.find((module) =>
+          ["career archive", "career library"].includes(
+            String(module?.title || "").trim().toLowerCase().replace(/\s+/g, " ")
+          )
+        );
+        if (active && careerModule?.id) setResolvedCareerModuleId(careerModule.id);
+      })
+      .catch((err) => console.warn("Unable to resolve Career Archive module:", err));
+
+    return () => { active = false; };
+  }, [CAREER_LIBRARY_MODULE_ID]);
 
   useEffect(() => {
     if (!archiveHistoryReadyRef.current) return;
@@ -1103,6 +1132,7 @@ useEffect(() => {
 
   useEffect(() => {
     async function loadAccess() {
+      if (!CAREER_LIBRARY_MODULE_ID) return;
       try {
         const result = await checkModuleAccess(
           CAREER_LIBRARY_MODULE_ID
@@ -1121,7 +1151,7 @@ useEffect(() => {
     }
 
     loadAccess();
-  }, []);
+  }, [CAREER_LIBRARY_MODULE_ID]);
 
   // Handle deep-linking from Global Search or direct URL params
   useEffect(() => {
@@ -1148,6 +1178,7 @@ useEffect(() => {
     const secondCategoryId = searchParams.get("secondCategoryId") || searchItem?.secondCategoryId || "";
 
     if (!type && !id && !title) return;
+    if (!CAREER_LIBRARY_MODULE_ID) return;
 
     let active = true;
 
@@ -1296,7 +1327,7 @@ useEffect(() => {
     return () => {
       active = false;
     };
-  }, [pageLocation.search, pageLocation.state]);
+  }, [pageLocation.search, pageLocation.state, CAREER_LIBRARY_MODULE_ID]);
 
   const detailUnlocked = hasSubscriptionAccess || moduleStatus !== "locked";
 
@@ -1568,6 +1599,11 @@ useEffect(() => {
   }
   async function createPreviewSession(pageType, pageId, item) {
     if (moduleStatus !== "preview") {
+      return null;
+    }
+
+    if (!CAREER_LIBRARY_MODULE_ID || !pageType || pageId == null || pageId === "") {
+      setError("Unable to start preview because Career Archive details are missing. Please reopen this item from search.");
       return null;
     }
 
