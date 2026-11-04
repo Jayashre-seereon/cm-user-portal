@@ -1,5 +1,5 @@
 /* CareerMap Official 31-Page Report Styling - Exact Match to PDF Specifications */
-@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,600;1,700&family=IBM+Plex+Mono:wght@500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&family=IBM+Plex+Mono:wght@500;600;700&display=swap");
 
 :root {
   --cm-red: #8C1814;
@@ -38,7 +38,7 @@
 }
 
 body {
-  font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  font-family: "Poppins", system-ui, -apple-system, sans-serif;
   color: var(--cm-body);
   background-color: var(--cm-page-bg);
   line-height: 1.5;
