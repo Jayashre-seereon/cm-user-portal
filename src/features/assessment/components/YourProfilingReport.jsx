@@ -194,7 +194,7 @@ export default function YourProfilingReport({
     <div className="pdf-page profiling-report-page" id={`page-${pageNum}`}>
       {PageHeader && <PageHeader studentFirstName={studentFirstName} />}
 
-      <div className="pdf-page-body flex flex-col justify-start py-1 space-y-2">
+      <div className="pdf-page-body profiling-report-body flex flex-col justify-start py-1 space-y-2">
         {/* ============================================================
             BLOCK 1: HEADER BLOCK
         ============================================================ */}
@@ -210,7 +210,7 @@ export default function YourProfilingReport({
             </div>
           )}
 
-          <p className="page-lead-text !mb-1 whitespace-pre-line text-[0.64rem] leading-tight text-[#374151]">
+          <p className="page-lead-text !mb-1 whitespace-pre-line text-sm leading-[1.5] text-[#374151]">
             {introParagraph}
           </p>
         </div>
@@ -218,7 +218,7 @@ export default function YourProfilingReport({
         {/* ============================================================
             BLOCK 2 & 3 & 6: STAGE TRACK + RISK BADGE + CRI SCORE
         ============================================================ */}
-        <div className="rounded-xl border border-[#E5E7EB] bg-gradient-to-br from-[#FAFCFD] to-[#F4F7FA] p-2 shadow-xs">
+        <div className="profiling-stage-card rounded-xl border border-[#E5E7EB] bg-gradient-to-br from-[#FAFCFD] to-[#F4F7FA] p-2 shadow-xs">
           {/* Top Row: Track Title & Badges */}
           <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[#E5E7EB]">
             <div className="flex items-center gap-2">

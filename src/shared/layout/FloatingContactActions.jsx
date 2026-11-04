@@ -26,7 +26,7 @@ export default function FloatingContactActions() {
   };
 
   return <>
-    <div className="fixed right-3 top-1/2 z-[1000] flex -translate-y-1/2 flex-col gap-3 sm:right-5" aria-label="Contact CareerMap">
+    <div className="no-print fixed right-3 top-1/2 z-[1000] flex -translate-y-1/2 flex-col gap-3 sm:right-5" aria-label="Contact CareerMap">
       <a href={`tel:${PHONE}`} aria-label="Call CareerMap" title="Call" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#9a2119] text-xl text-white shadow-lg transition hover:scale-105 hover:bg-[#7f1711]"><PhoneOutlined /></a>
       <a href={`https://wa.me/${PHONE.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" aria-label="WhatsApp CareerMap" title="WhatsApp" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#25D366] text-2xl text-white shadow-lg transition hover:scale-105 hover:bg-[#1eae53]"><WhatsAppOutlined /></a>
       <button type="button" onClick={() => setOpen(true)} aria-label="Send a message" title="Send a message" className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-xl text-[#9a2119] shadow-lg ring-1 ring-[#f0e4e2] transition hover:scale-105"><MessageOutlined /></button>

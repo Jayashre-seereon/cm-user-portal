@@ -496,7 +496,10 @@ button.filter-pill-selected:active {
   footer,
   .website-navbar,
   .website-footer,
-  .report-action-bar {
+  .report-action-bar,
+  .career-bee-pop,
+  #career-bee-panel,
+  .ant-modal-root {
     display: none !important;
   }
 
