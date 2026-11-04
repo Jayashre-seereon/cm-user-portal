@@ -135,7 +135,7 @@ export default function CareerBeeLauncher() {
 
       <div
         ref={anchorRef}
-        className={`fixed bottom-4 right-4 z-[990] sm:bottom-5 ${open ? "max-sm:hidden" : ""}`}
+        className={`no-print fixed bottom-4 right-4 z-[990] sm:bottom-5 ${open ? "max-sm:hidden" : ""}`}
         style={{
           marginBottom: "env(safe-area-inset-bottom, 0px)",
           transform: lift ? `translateY(-${lift}px)` : undefined,
