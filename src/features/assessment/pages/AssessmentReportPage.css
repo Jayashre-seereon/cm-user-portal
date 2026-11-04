@@ -94,17 +94,6 @@ body {
   break-after: page;
 }
 
-/* Tailwind text-size utilities are used throughout the report JSX. Override
-   their body copy sizes while leaving headings and compact data labels intact. */
-.pdf-page p,
-.pdf-page [class*="text-[0."],
-.pdf-page [class*="text-xs"],
-.pdf-page [class*="text-sm"] {
-  font-size: 1rem !important;
-  text-align: justify;
-  text-justify: inter-word;
-}
-
 /* Page Body Flex */
 .pdf-page-body {
   flex: 1;
@@ -113,82 +102,46 @@ body {
   justify-content: flex-start;
   width: 100%;
   padding-top: 2px;
-  font-size: 1rem;
-  text-align: justify;
-  text-justify: inter-word;
 }
 
-/* Keep the detailed profiling guide compact so the notes and all five area
-   cards remain inside their fixed A4 page. The global report typography rule
-   otherwise expands these intentionally small labels and paragraphs. */
-.profiling-report-page .page-lead-text {
-  font-size: 0.9rem !important;
-  line-height: 1.4 !important;
-  text-align: left !important;
+/* On the profiling page, keep the footer directly after the report content. */
+.profiling-report-page .profiling-report-body {
+  flex: 0 0 auto;
 }
 
-.profiling-report-page .profiling-stage-descriptions,
-.profiling-report-page .profiling-stage-descriptions * {
-  font-size: 0.66rem !important;
-  line-height: 1.18 !important;
-  text-align: left !important;
-  text-justify: auto !important;
+.profiling-report-page .pdf-footer {
+  margin-top: 12px;
 }
 
-.profiling-report-page .profiling-meaning-card p,
-.profiling-report-page .profiling-area-list p,
-.profiling-report-page .profiling-guidance-note {
-  font-size: 0.72rem !important;
-  line-height: 1.22 !important;
-  text-align: left !important;
-  text-justify: auto !important;
+/* Compact profiling cards to balance the slightly larger introductory copy. */
+.profiling-report-page .profiling-stage-card {
+  padding: 6px !important;
 }
 
+.profiling-report-page .profiling-stage-descriptions {
+  margin-top: 0.25rem !important;
+  padding-top: 0.25rem !important;
+  gap: 0.15rem 0.6rem !important;
+}
+
+.profiling-report-page .profiling-meaning-card,
+.profiling-report-page .profiling-area-list > div,
 .profiling-report-page .profiling-guidance {
-  padding: 6px 8px !important;
+  padding: 5px 8px !important;
 }
 
-/* Page 21 has six category illustrations and four overview cards. Keep its
-   intentional compact typography so the full overview fits on one A4 page. */
-.aptitude-overview-page .pdf-page-body {
-  gap: 0.4rem;
-}
-
-.aptitude-overview-page .page-lead-text,
-.aptitude-overview-page .font-bold.text-sm {
-  font-size: 0.68rem !important;
-  line-height: 1.35 !important;
-  text-align: left !important;
-  text-justify: auto !important;
-}
-
-.aptitude-overview-page .aptitude-category-image {
-  height: 150px;
-  max-height: 150px;
-}
-
-.aptitude-overview-page .aptitude-summary-grid > div > div:first-child {
-  padding: 6px 8px !important;
-  font-size: 0.68rem !important;
-  line-height: 1.2 !important;
-}
-
-.aptitude-overview-page .aptitude-summary-grid > div > div:last-child {
-  padding: 8px 10px !important;
-  font-size: 0.68rem !important;
-  line-height: 1.35 !important;
-  text-align: left !important;
-  text-justify: auto !important;
+.profiling-report-page .profiling-area-list {
+  gap: 0.15rem !important;
 }
 
 /* Keep report prose readable and consistently justified across all pages. */
-.pdf-page p,
+.pdf-page:not(.profiling-report-page) p,
 .pdf-page .detail-card-right-body,
 .pdf-page .detail-card-desc,
 .pdf-page .detail-card-meta-row,
 .pdf-page .trait-card-right-body,
 .pdf-page .cluster-match-card-body,
-.pdf-page .page-lead-text {
+.pdf-page:not(.profiling-report-page) .page-lead-text {
   font-size: 1rem;
   text-align: justify;
   text-justify: inter-word;

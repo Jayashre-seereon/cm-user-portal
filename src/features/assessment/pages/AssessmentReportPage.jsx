@@ -1553,7 +1553,7 @@ const goalOrientationSummary = Math.abs(longPct - shortPct) <= 10 ? "Balanced Pl
         {/* ============================================================
             PAGE 21: APTITUDE (OVERVIEW)
         ============================================================ */}
-        <div className="pdf-page aptitude-overview-page" id="page-21">
+        <div className="pdf-page" id="page-21">
           <PageHeader studentFirstName={studentFirstName} />
 
           <div className="pdf-page-body">
@@ -1567,17 +1567,16 @@ const goalOrientationSummary = Math.abs(longPct - shortPct) <= 10 ? "Balanced Pl
             </div>
 
             {/* 6 Hanging Clip Badges matching PDF Page 20 */}
-                        {/* 6 Hanging Clip Badges matching PDF Page 20 */}
-                       <div className="my-1 flex justify-center items-center overflow-hidden">
+            <div className="my-2 flex justify-center items-center overflow-hidden">
               <img
                 src={ReportImg6}
                 alt="Aptitude Categories"
-                className="aptitude-category-image w-full object-contain scale-100 max-w-[550px] mx-auto"
+                className="w-full object-contain scale-100 max-w-[540px] mx-auto"
               />
             </div>
 
             {/* 4 Summary Cards matching PDF */}
-            <div className="aptitude-summary-grid grid grid-cols-2 gap-3 mt-2">
+            <div className="grid grid-cols-2 gap-4 mt-3">
               <div className="rounded-xl border border-[#8C1814] overflow-hidden">
                 <div className="bg-[#8C1814] text-white p-2 text-center text-xs font-black uppercase">MECHANICAL APTITUDE</div>
                 <div className="p-3 text-xs leading-relaxed text-[#374151] bg-[#FDF4F3]">
