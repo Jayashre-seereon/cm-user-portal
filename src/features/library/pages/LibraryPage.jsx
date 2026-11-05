@@ -588,11 +588,42 @@ function getFallbackNextItems(type, item) {
   return [];
 }
 
+const STREAM_ORDER = [
+  "science",
+  "commerce",
+  "artsandhumanities",
+  "neutral",
+  "competitive",
+  "vocational",
+  "Career Clusters"
+].map(normalizeStreamKey);
+
+function normalizeStreamKey(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function sortStreamsByPriority(items) {
+  return [...items].sort((a, b) => {
+    const aIndex = STREAM_ORDER.indexOf(normalizeStreamKey(a.name));
+    const bIndex = STREAM_ORDER.indexOf(normalizeStreamKey(b.name));
+    const aRank = aIndex === -1 ? STREAM_ORDER.length : aIndex;
+    const bRank = bIndex === -1 ? STREAM_ORDER.length : bIndex;
+    return aRank - bRank;
+  });
+}
+
 function normalizeStreamItems(items) {
   if (!Array.isArray(items) || items.length === 0) {
-    return careerLibrary.streams.map((item, index) => normalizeStreamItem(item, index));
+    return sortStreamsByPriority(
+      careerLibrary.streams.map((item, index) => normalizeStreamItem(item, index))
+    );
   }
-  return items.map((item, index) => normalizeStreamItem(item, index));
+  return sortStreamsByPriority(
+    items.map((item, index) => normalizeStreamItem(item, index))
+  );
 }
 
 function normalizeStepItems(items, type) {
