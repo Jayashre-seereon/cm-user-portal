@@ -51,23 +51,27 @@ function isDeadlineComingSoon(deadline) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   parsedDate.setHours(0, 0, 0, 0);
-  const monthBeforeDeadline = new Date(parsedDate);
-  monthBeforeDeadline.setMonth(monthBeforeDeadline.getMonth() - 1);
-  return today >= monthBeforeDeadline && today < parsedDate;
+  const daysUntilDeadline = Math.ceil(
+    (parsedDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+  );
+  return daysUntilDeadline >= 0 && daysUntilDeadline <= 30;
 }
 
 function getScholarshipStatus(deadline) {
   if (!deadline) {
-    return "Active";
+    return "Expired";
   }
 
   const parsedDate = new Date(deadline);
 
   if (Number.isNaN(parsedDate.getTime())) {
-    return "Active";
+    return "Expired";
   }
 
-  return parsedDate.getTime() >= Date.now() ? "Active" : "Expired";
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  parsedDate.setHours(0, 0, 0, 0);
+  return parsedDate.getTime() >= today.getTime() ? "Active" : "Expired";
 }
 
 function formatAmount(price) {

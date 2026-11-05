@@ -248,6 +248,11 @@ const filtered = useMemo(
         );
       })
       .sort((a, b) => {
+        // The All view groups every active opportunity (including Coming soon)
+        // above expired opportunities.
+        if (activeStatus === "All" && a.status !== b.status) {
+          return a.status === "Active" ? -1 : 1;
+        }
         if (a.createdAt && b.createdAt) {
           return new Date(b.createdAt) - new Date(a.createdAt);
         }
