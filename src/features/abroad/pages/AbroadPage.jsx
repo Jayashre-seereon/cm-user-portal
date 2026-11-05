@@ -708,17 +708,28 @@ if (selectedCountry) {
               />
 
               {/* Date of Birth */}
-              <input
-                type="date"
-                value={consultForm.dateOfBirth}
-                onChange={(e) =>
-                  setConsultForm((current) => ({
-                    ...current,
-                    dateOfBirth: e.target.value,
-                  }))
-                }
-                className="form-input"
-              />
+              <div>
+                <label
+                  htmlFor="consult-date-of-birth"
+                  className="mb-1 block text-sm text-gray-500"
+                >
+                  Date of Birth 
+                </label>
+                <input
+                  id="consult-date-of-birth"
+                  type="date"
+                  lang="en-GB"
+                  aria-label="Date of Birth"
+                  value={consultForm.dateOfBirth}
+                  onChange={(e) =>
+                    setConsultForm((current) => ({
+                      ...current,
+                      dateOfBirth: e.target.value,
+                    }))
+                  }
+                  className="form-input"
+                />
+              </div>
 
               {/* Gender */}
               <div className="rounded-xl border border-[#ead9d5] bg-[#fffdfc] p-3 lg:col-span-2">
@@ -2179,6 +2190,7 @@ if (selectedCountry) {
 
                   // Student
                   fullName: consultForm.fullName.trim(),
+                  // Date inputs display by locale and provide ISO YYYY-MM-DD.
                   dateOfBirth: consultForm.dateOfBirth,
                   gender: consultForm.gender,
                   email: consultForm.email.trim(),
