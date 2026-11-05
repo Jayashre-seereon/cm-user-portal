@@ -1416,19 +1416,21 @@ if (selectedCountry) {
 
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-
-              <input
-                type="date"
-                aria-label="English test score date"
-                value={consultForm.englishTestScoreDate}
-                onChange={(e) =>
-                  setConsultForm((current) => ({
-                    ...current,
-                    englishTestScoreDate: e.target.value,
-                  }))
-                }
-                className="form-input"
-              />
+              <label className="block text-sm font-medium text-gray-700">
+                English Test Score Date
+                <input
+                  type="date"
+                  aria-label="English Test Score Date"
+                  value={consultForm.englishTestScoreDate}
+                  onChange={(e) =>
+                    setConsultForm((current) => ({
+                      ...current,
+                      englishTestScoreDate: e.target.value,
+                    }))
+                  }
+                  className="form-input mt-1"
+                />
+              </label>
 
             </div>
 
@@ -1502,18 +1504,21 @@ if (selectedCountry) {
             </div>
 
 
-            <input
-              type="date"
-              aria-label="Entrance exam score date"
-              value={consultForm.entranceExamScoreDate}
-              onChange={(e) =>
-                setConsultForm((current) => ({
-                  ...current,
-                  entranceExamScoreDate: e.target.value,
-                }))
-              }
-              className="form-input mt-4 w-full"
-            />
+            <label className="mt-4 block text-sm font-medium text-gray-700">
+              Entrance Exam Score Date
+              <input
+                type="date"
+                aria-label="Entrance Exam Score Date"
+                value={consultForm.entranceExamScoreDate}
+                onChange={(e) =>
+                  setConsultForm((current) => ({
+                    ...current,
+                    entranceExamScoreDate: e.target.value,
+                  }))
+                }
+                className="form-input mt-1 w-full"
+              />
+            </label>
 
           </section>
 
@@ -1872,17 +1877,21 @@ if (selectedCountry) {
 
 
             {/* Passport Expiry */}
-            <input
-              type="date"
-              value={consultForm.passportExpiryDate}
-              onChange={(e) =>
-                setConsultForm((current) => ({
-                  ...current,
-                  passportExpiryDate: e.target.value,
-                }))
-              }
-              className="form-input mb-4 w-full"
-            />
+            <label className="mb-4 block text-sm font-medium text-gray-700">
+              Passport Expiry Date
+              <input
+                type="date"
+                aria-label="Passport Expiry Date"
+                value={consultForm.passportExpiryDate}
+                onChange={(e) =>
+                  setConsultForm((current) => ({
+                    ...current,
+                    passportExpiryDate: e.target.value,
+                  }))
+                }
+                className="form-input mt-1 w-full"
+              />
+            </label>
 
 
             {/* Documents */}
