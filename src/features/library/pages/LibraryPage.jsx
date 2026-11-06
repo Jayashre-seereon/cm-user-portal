@@ -46,6 +46,7 @@ import {
 } from "../../portal/components/portalPageShared";
 import { checkModuleAccess, startPreview, } from "../../../api/moduleAccessApi";
 import { getDashboard } from "../../../api/dashboardApi";
+import { getInstitutes } from "../../../api/instituteApi";
 import { useScrollToTopOnChange } from "../../../shared/useScrollToTopOnChange";
 
 const streamIcons = {
@@ -708,7 +709,7 @@ function SectionHeader({ icon, title }) {
     </div>
   );
 }
-function InstituteFilterGroup({ institutes, badge, emptyText, showLocationFilter = true }) {
+function InstituteFilterGroup({ institutes, badge, emptyText, showLocationFilter = true, onLoadMore, hasNextPage, loadingMore }) {
   const [filter, setFilter] = useState("all");
   const [country, setCountry] = useState("India");
   const [state, setState] = useState("");
@@ -806,6 +807,11 @@ function InstituteFilterGroup({ institutes, badge, emptyText, showLocationFilter
         </div>
       ) : (
         <p className="text-sm text-gray-400">{emptyText}</p>
+      )}
+      {hasNextPage && (
+        <button type="button" onClick={onLoadMore} disabled={loadingMore} className="mt-4 rounded-full border border-[#d7c3bc] px-5 py-2 text-sm font-bold text-[#9a2119] disabled:opacity-60">
+          {loadingMore ? "Loading colleges…" : "Load more colleges"}
+        </button>
       )}
     </div>
   );
@@ -940,6 +946,12 @@ const [indiaStates, setIndiaStates] = useState([]);
   const [secondCategories, setSecondCategories] = useState([]);
   const [subCategories, setSubCategories] = useState([]);
   const [details, setDetails] = useState([]);
+  const [dynamicInstitutes, setDynamicInstitutes] = useState([]);
+  const [institutesPage, setInstitutesPage] = useState(1);
+  const [institutesHasNextPage, setInstitutesHasNextPage] = useState(false);
+  const [institutesLoading, setInstitutesLoading] = useState(false);
+  const [institutesError, setInstitutesError] = useState("");
+  const institutesRequestRef = useRef(0);
 
   const [detailReturnLevel, setDetailReturnLevel] = useState("streams");
   const [loading, setLoading] = useState(false);
@@ -966,6 +978,55 @@ const [indiaStates, setIndiaStates] = useState([]);
 
   const [previewExpired, setPreviewExpired] = useState(false);
   const hasSubscriptionAccess = accessStatus === "unlocked";
+
+  const instituteScope = useMemo(() => ({
+    categoryId: selectedCategory?.id || selectedSecondCategory?.categoryId || selectedSubCategory?.categoryId || selectedDetailSource?.categoryId || "",
+    secondcategoryId: selectedSecondCategory?.id || selectedSubCategory?.secondcategoryId || selectedDetailSource?.secondcategoryId || "",
+    subcategoryId: selectedSubCategory?.id || selectedDetailSource?.subcategoryId || "",
+  }), [selectedCategory?.id, selectedSecondCategory?.id, selectedSubCategory?.id, selectedDetailSource?.categoryId, selectedDetailSource?.secondcategoryId, selectedDetailSource?.subcategoryId]);
+
+  useEffect(() => {
+    if (currentLevel !== "details") return undefined;
+    const requestId = ++institutesRequestRef.current;
+    let active = true;
+    setDynamicInstitutes([]);
+    setInstitutesPage(1);
+    setInstitutesHasNextPage(false);
+    setInstitutesError("");
+    setInstitutesLoading(true);
+    getInstitutes({ ...instituteScope, page: 1, limit: 10 })
+      .then((result) => {
+        if (!active || requestId !== institutesRequestRef.current) return;
+        setDynamicInstitutes(result.items);
+        setInstitutesHasNextPage(Boolean(result.pagination?.hasNextPage));
+      })
+      .catch(() => {
+        if (active && requestId === institutesRequestRef.current) setInstitutesError("Unable to load colleges right now.");
+      })
+      .finally(() => {
+        if (active && requestId === institutesRequestRef.current) setInstitutesLoading(false);
+      });
+    return () => { active = false; };
+  }, [currentLevel, instituteScope]);
+
+  async function loadMoreInstitutes() {
+    if (institutesLoading || !institutesHasNextPage) return;
+    const nextPage = institutesPage + 1;
+    const requestId = institutesRequestRef.current;
+    setInstitutesLoading(true);
+    setInstitutesError("");
+    try {
+      const result = await getInstitutes({ ...instituteScope, page: nextPage, limit: 10 });
+      if (requestId !== institutesRequestRef.current) return;
+      setDynamicInstitutes((current) => [...current, ...result.items]);
+      setInstitutesPage(nextPage);
+      setInstitutesHasNextPage(Boolean(result.pagination?.hasNextPage));
+    } catch (_error) {
+      if (requestId === institutesRequestRef.current) setInstitutesError("Unable to load more colleges. Please try again.");
+    } finally {
+      if (requestId === institutesRequestRef.current) setInstitutesLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (CAREER_LIBRARY_MODULE_ID) return;
@@ -1818,7 +1879,7 @@ useEffect(() => {
   function renderDetailItem(detail, index) {
     const title = detail?.title || getItemTitle(detail);
     const Section = SectionCard;
-    const instituteGroups = groupInstitutesByTopStatus(detail?.institutes, "Odisha");
+    const instituteGroups = groupInstitutesByTopStatus(dynamicInstitutes, "Odisha");
     const careerpaths = detail?.raw?.careerpaths || [];
     const entranceexams = detail?.raw?.entranceexams || [];
     const jobs = toList(detail?.jobs || detail?.jobScope);
@@ -1829,7 +1890,7 @@ useEffect(() => {
     const hasEntranceExams = entranceexams.length > 0 || toList(detail?.exams).length > 0;
     const hasJobs = jobs.length > 0;
     const hasSalary = salaryRanges.length > 0 || Boolean(detail?.salary);
-    const hasTopInstitutes = instituteGroups.topInstitutes.length > 0 || instituteGroups.outsideInstitutes.length > 0;
+    const hasTopInstitutes = dynamicInstitutes.length > 0 || institutesLoading || institutesError;
 
     const sidebarSections = [
       ...descriptionSections.map((item, itemIndex) => ({
@@ -2148,39 +2209,26 @@ className="inline-flex h-10 w-10 items-center justify-center rounded-full border
                 )}
               </Section>
               ) : null}
-  {instituteGroups.outsideInstitutes.length > 0 ? (
-              <Section
-                id={`top-out-${index}`}
-                icon={<EnvironmentOutlined />}
-                title="Institutes in INDIA
-"
-                subtitle="All institutes from other states are shown here."
-              >
-                <InstituteFilterGroup
-                  institutes={instituteGroups.outsideInstitutes}
-               
-                  emptyText="No institutes found outside Odisha."
-                />
-              </Section>
-              ) : null}
-
-              {instituteGroups.topInstitutes.length > 0 ? (
+  {dynamicInstitutes.length > 0 || institutesLoading || institutesError ? (
               <Section
                 id={`top-in-${index}`}
                 icon={<BankOutlined />}
-                title="Institutes in Odisha"
-                subtitle="Institutes in Odisha highlighted from this career map data."
+                title="Institutions"
+                subtitle="Colleges matching this career category."
               >
-                <InstituteFilterGroup
-                  institutes={instituteGroups.topInstitutes}
-                 
-                  emptyText="No Odisha institutes found."
-                  showLocationFilter={false}
-                />
+                {dynamicInstitutes.length > 0 ? (
+                  <InstituteFilterGroup
+                    institutes={dynamicInstitutes}
+                    emptyText="No colleges found for this selection."
+                    onLoadMore={loadMoreInstitutes}
+                    hasNextPage={institutesHasNextPage}
+                    loadingMore={institutesLoading}
+                  />
+                ) : null}
+                {institutesLoading && dynamicInstitutes.length === 0 ? <p className="text-sm text-gray-500">Loading colleges…</p> : null}
+                {institutesError ? <p className="text-sm text-red-600">{institutesError}</p> : null}
               </Section>
               ) : null}
-
-            
 
           </div>
         </div>

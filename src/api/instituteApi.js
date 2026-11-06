@@ -131,7 +131,12 @@ function mapInstituteItem(item, index) {
 */
 export async function getInstitutes({
   page = 1,
-  limit = 30,
+  limit = 20,
+  streamId = "",
+  categoryId = "",
+  secondcategoryId = "",
+  subcategoryId = "",
+  search = "",
   category = "",
   country = "",
   state = "",
@@ -141,6 +146,11 @@ export async function getInstitutes({
 
   if (page) params.append("page", page);
   if (limit) params.append("limit", limit);
+  if (streamId) params.append("streamId", streamId);
+  if (categoryId) params.append("categoryId", categoryId);
+  if (secondcategoryId) params.append("secondcategoryId", secondcategoryId);
+  if (subcategoryId) params.append("subcategoryId", subcategoryId);
+  if (search) params.append("search", search);
 
   if (category && category !== "all") {
     params.append("category", category);
@@ -158,9 +168,7 @@ export async function getInstitutes({
     params.append("type", type);
   }
 
-  const response = await api.get(
-    `/institutes/paginated?${params.toString()}`
-  );
+  const response = await api.get(`/careerlibrary/institutions?${params.toString()}`);
 
   const items = Array.isArray(response?.data?.data)
     ? response.data.data
@@ -192,4 +200,4 @@ export const fetchInstitutions = getInstitutes;
 export const getCategories = async () => {
   const res = await api.get("/categories/");
   return res.data;
-};
+};
