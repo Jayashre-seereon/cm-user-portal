@@ -145,7 +145,7 @@ export async function getInstitutes({
   const params = new URLSearchParams();
 
   if (page) params.append("page", page);
-  if (limit) params.append("limit", limit);
+  if (limit != null && limit !== "") params.append("limit", limit);
   if (streamId) params.append("streamId", streamId);
   if (categoryId) params.append("categoryId", categoryId);
   if (secondcategoryId) params.append("secondcategoryId", secondcategoryId);
