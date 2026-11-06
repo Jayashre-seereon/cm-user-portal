@@ -376,7 +376,7 @@ const filtered = useMemo(
                       }`}
                   >
                     {isActive ? <CheckCircleOutlined /> : <MinusCircleOutlined />}
-                    {selectedItem.status}
+                    {isActive ? "Active" : "Inactive"}
                   </span>
                 </div>
 
@@ -675,13 +675,20 @@ const filtered = useMemo(
                       {item.name}
                     </p>
                   </div>
-                  <span
-                    className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-2 text-[15px] font-bold ${
-                      isLocked ? "bg-[#fdf0ee] text-[#9a2119]" : "bg-green-100 text-green-700"
-                    }`}
-                  >
-                    {isLocked ? <LockOutlined /> : <UnlockOutlined />}
-                  </span>
+                  <div className="flex shrink-0 flex-col items-end gap-2">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}
+                    >
+                      {isActive ? "Active" : "Inactive"}
+                    </span>
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-2 text-[15px] font-bold ${
+                        isLocked ? "bg-[#fdf0ee] text-[#9a2119]" : "bg-green-100 text-green-700"
+                      }`}
+                    >
+                      {isLocked ? <LockOutlined /> : <UnlockOutlined />}
+                    </span>
+                  </div>
                 </div>
 
                 {item.comingSoon ? <span className="inline-flex w-fit rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-amber-800">Coming soon</span> : null}
