@@ -18,9 +18,14 @@ import { useNavigate } from "react-router-dom";
 import { globalSearch } from "../../api/searchApi";
 import { resolveNavigationTarget } from "../../utils/searchNavigation";
 import { useAppState } from "../../state/AppStateContext";
+import { checkModuleAccess } from "../../api/moduleAccessApi";
+import { buildDashboardModules } from "../../utils/dashboard";
+import { UnlockRedirectModal } from "../../features/portal/components/portalPageShared";
+import { moduleCards } from "../../data/careermapData";
 
 const CATEGORY_TABS = [
   { key: "all", label: "All", groupKey: null },
+  { key: "modules", label: "Modules", groupKey: "modules", types: ["module"] },
   { key: "careers", label: "Careers", groupKey: "careers", types: ["stream", "category", "secondcategory", "subcategory", "careerpath"] },
   { key: "institutions", label: "Colleges", groupKey: "institutions", types: ["institution", "college"] },
   { key: "entranceExams", label: "Exams", groupKey: "entranceExams", types: ["entranceexam", "exam"] },
@@ -32,17 +37,18 @@ const CATEGORY_TABS = [
   { key: "newsletters", label: "Career Insights", groupKey: "newsletters", types: ["newsletter"] },
 ];
 
-const POPULAR_SHORTCUTS = [
-  { label: "Engineering Careers", query: "Engineering", group: "careers", route: "/app/library" },
-  { label: "Top Colleges", query: "Institute", group: "institutions", route: "/app/institutes" },
-  { label: "Entrance Exams", query: "Exam", group: "entranceExams", route: "/app/entrance-exam" },
-  { label: "1-on-1 Mentorship", query: "Mentor", group: "mentors", route: "/app/book-mentor" },
-  { label: "Scholarships", query: "Scholarship", group: "scholarships", route: "/app/scholarships" },
-];
-
 function getTypeConfig(item = {}) {
   const type = String(item.type || "").toLowerCase();
   const group = String(item.group || "").toLowerCase();
+
+  if (type === "module" || group === "modules") {
+    return {
+      label: "Module",
+      badgeClass: "bg-[#fdf0ee] text-[#9a2119] border-[#f2d1c7]",
+      avatarBg: "#9a2119",
+      icon: <AppstoreOutlined />,
+    };
+  }
 
   if (["stream", "category", "secondcategory", "subcategory", "careerpath"].includes(type) || group === "careers") {
     return {
@@ -170,6 +176,7 @@ export default function GlobalSearchBar({ className = "" }) {
     results: [],
     grouped: {},
   });
+  const [lockedModule, setLockedModule] = useState(null);
 
   // Debounced API search effect
   useEffect(() => {
@@ -199,9 +206,23 @@ export default function GlobalSearchBar({ className = "" }) {
         });
 
         if (response && response.success !== false) {
-          const results = Array.isArray(response.results) ? response.results : [];
+          const entityResults = Array.isArray(response.results) ? response.results : [];
+          const normalizedQuery = trimmed.toLowerCase().replace(/\s+/g, " ");
+          const moduleResults = moduleCards
+            .filter((module) => module.title.toLowerCase().includes(normalizedQuery))
+            .map((module) => ({
+              id: `module:${module.route}`,
+              title: module.title,
+              subtitle: module.subtitle,
+              type: "module",
+              group: "modules",
+              badge: "Module",
+              navigation: { path: module.route },
+            }));
+          const results = [...moduleResults, ...entityResults];
           const grouped = response.grouped || {};
-          const total = typeof response.total === "number" ? response.total : results.length;
+          grouped.modules = moduleResults;
+          const total = (typeof response.total === "number" ? response.total : entityResults.length) + moduleResults.length;
 
           setSearchData({
             total,
@@ -309,9 +330,16 @@ export default function GlobalSearchBar({ className = "" }) {
     return CATEGORY_TABS.filter((tab) => tab.key === "all" || tabCounts[tab.key] > 0);
   }, [query, searchData, tabCounts]);
 
-  function handleSelectItem(item) {
+  async function handleSelectItem(item) {
     if (!item) return;
-    const targetUrl = resolveNavigationTarget(item);
+    const resolvedUrl = resolveNavigationTarget(item);
+    const resolvedPath = resolvedUrl.split("?")[0].replace(/\/$/, "");
+    const openModuleLanding =
+      String(item.type || "").toLowerCase() === "module" ||
+      ["/app/institutes", "/app/scholarships", "/app/entrance-exam", "/app/learn"].includes(resolvedPath);
+    // Search entities in these modules should open the module's full listing,
+    // not auto-select one result via query params or searchItem state.
+    const targetUrl = openModuleLanding ? resolvedPath : resolvedUrl;
     setIsOpen(false);
     setQuery("");
     setSearchData({ total: 0, results: [], grouped: {} });
@@ -319,20 +347,28 @@ export default function GlobalSearchBar({ className = "" }) {
     if (/^https?:\/\//i.test(targetUrl)) {
       window.location.href = targetUrl;
     } else {
-      const isCareerArchiveTarget = targetUrl.startsWith("/app/library");
-      const careerArchiveModule = dashboardData?.modules?.find((module) =>
-        ["career archive", "career library"].includes(
-          String(module?.title || "").trim().toLowerCase().replace(/\s+/g, " ")
-        )
-      );
-      navigate(targetUrl, {
-        state: {
-          searchItem: item,
-          ...(isCareerArchiveTarget && careerArchiveModule?.id
-            ? { moduleId: careerArchiveModule.id }
-            : {}),
-        },
-      });
+      const targetPath = targetUrl.split("?")[0].replace(/\/$/, "");
+      const modules = buildDashboardModules(dashboardData?.modules || []);
+      const targetModule = modules.find((module) => module.route === targetPath);
+      if (targetModule?.id) {
+        try {
+          const response = await checkModuleAccess(targetModule.id);
+          if (!response?.allowed) {
+            setLockedModule({ title: targetModule.title });
+            return;
+          }
+          navigate(targetUrl, {
+            state: { moduleId: targetModule.id, accessStatus: response.mode || "full" },
+          });
+        } catch (error) {
+          console.error("Could not validate module access:", error);
+          navigate(targetUrl, {
+            state: { moduleId: targetModule.id },
+          });
+        }
+        return;
+      }
+      navigate(targetUrl);
     }
   }
 
@@ -556,39 +592,6 @@ export default function GlobalSearchBar({ className = "" }) {
               </div>
             )}
 
-            {/* 4. Initial Focus State (Quick Shortcuts / Popular Searches) */}
-            {!hasQuery && (
-              <div className="p-2">
-                <div className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wider text-[#aa8a83]">
-                  Popular Categories & Quick Links
-                </div>
-                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                  {POPULAR_SHORTCUTS.map((shortcut) => (
-                    <button
-                      key={shortcut.label}
-                      type="button"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        setQuery(shortcut.query);
-                      }}
-                      className="flex items-center gap-2.5 rounded-xl border border-[#eaded9] bg-[#faf7f5] p-2.5 text-left transition hover:border-[#9a2119] hover:bg-[#fdf0ed]"
-                    >
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#9a2119] text-white">
-                        <SearchOutlined className="text-[11px]" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="truncate text-[12.5px] font-semibold text-[#241d1e]">
-                          {shortcut.label}
-                        </div>
-                        <div className="text-[10.5px] text-[#8c6c67]">
-                          Search &ldquo;{shortcut.query}&rdquo;
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Footer note */}
@@ -602,6 +605,17 @@ export default function GlobalSearchBar({ className = "" }) {
           </div>
         </div>
       )}
+      <UnlockRedirectModal
+        open={Boolean(lockedModule)}
+        title="Module Locked"
+        itemLabel={lockedModule?.title}
+        description="This module is locked. Please purchase a subscription to continue accessing this module."
+        onCancel={() => setLockedModule(null)}
+        onConfirm={() => {
+          setLockedModule(null);
+          navigate("/app/subscription");
+        }}
+      />
     </div>
   );
 }
