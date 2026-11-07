@@ -2059,7 +2059,7 @@ useEffect(() => {
                         {careerpaths.map((cp, cpIdx) => (
                           <tr key={cp?.id ?? cpIdx} className={cpIdx % 2 === 0 ? "bg-white" : "bg-[#fdf9f9]"}>
                             <td className="whitespace-nowrap border-b border-[#f7eeec] px-4 py-3 font-semibold text-[#9a2119]">
-                              {cp?.path?.pathtype || cp?.pathName || `Path ${cpIdx + 1}`}
+                              {`Path ${cpIdx + 1}`}
                             </td>
                             <td className="border-b border-[#f7eeec] px-4 py-3 text-[#62585c]">
                               {cp?.stream || "—"}
