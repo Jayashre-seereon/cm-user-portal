@@ -136,6 +136,7 @@ export async function getInstitutes({
   categoryId = "",
   secondcategoryId = "",
   subcategoryId = "",
+  region = "",
   search = "",
   category = "",
   country = "",
@@ -150,6 +151,7 @@ export async function getInstitutes({
   if (categoryId) params.append("categoryId", categoryId);
   if (secondcategoryId) params.append("secondcategoryId", secondcategoryId);
   if (subcategoryId) params.append("subcategoryId", subcategoryId);
+  if (region) params.append("region", region);
   if (search) params.append("search", search);
 
   if (category && category !== "all") {

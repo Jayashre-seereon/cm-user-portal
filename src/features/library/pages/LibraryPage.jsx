@@ -308,46 +308,6 @@ function normalizeCountryName(value = "") {
   return String(value).trim().toLowerCase();
 }
 
-function normalizeStateName(value = "") {
-  return String(value).trim().toLowerCase();
-}
-
-function isOdishaState(value = "") {
-  return ["odisha", "orissa"].includes(normalizeStateName(value));
-}
-
-function groupInstitutesByTopStatus(value, targetState = "Odisha") {
-  const institutes = value || [];
-
-  const normalizedTargetState = normalizeStateName(targetState);
-
-  const sortTopFirst = (items) => {
-    return [...items].sort((a, b) => {
-      return Number(b.isTop) - Number(a.isTop);
-    });
-  };
-
-  const odishaInstitutes = institutes.filter(
-    (item) =>
-      normalizeStateName(item.state) === normalizedTargetState
-  );
-
-  const outsideInstitutes = institutes.filter(
-    (item) =>
-      normalizeStateName(item.state) !== normalizedTargetState
-  );
-
-  return {
-    institutes,
-
-    topInstitutes: sortTopFirst(odishaInstitutes),
-
-    outsideInstitutes: sortTopFirst(outsideInstitutes),
-
-    targetState,
-  };
-}
-
 function formatSalaryAmount(value) {
   const numericValue = Number(value);
   if (!Number.isFinite(numericValue)) return String(value ?? "");
@@ -713,10 +673,17 @@ function SectionHeader({ icon, title }) {
     </div>
   );
 }
-function InstituteFilterGroup({ institutes, badge, emptyText, showLocationFilter = true, onPageChange, page, totalPages, loadingMore }) {
+function InstituteFilterGroup({ scope, region, badge, emptyText, showLocationFilter = true }) {
   const [filter, setFilter] = useState("all");
   const [country, setCountry] = useState("India");
   const [state, setState] = useState("");
+  const [institutes, setInstitutes] = useState([]);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const requestIdRef = useRef(0);
+  const pageSize = 12;
 
   const india = Country.getCountryByCode("IN");
   const states = State.getStatesOfCountry(india.isoCode);
@@ -734,18 +701,46 @@ function InstituteFilterGroup({ institutes, badge, emptyText, showLocationFilter
     return result;
   }, [institutes]);
 
+  useEffect(() => {
+    const requestId = ++requestIdRef.current;
+    let active = true;
+    setLoading(true);
+    setError("");
+    getInstitutes({
+      ...scope,
+      page,
+      limit: pageSize,
+      region,
+      state: state || "",
+      type: filter === "govt" ? "Govt" : filter === "private" ? "Pvt" : "",
+    })
+      .then((result) => {
+        if (!active || requestId !== requestIdRef.current) return;
+        setInstitutes(result.items || []);
+        setPagination(result.pagination || null);
+      })
+      .catch((fetchError) => {
+        if (!active || requestId !== requestIdRef.current) return;
+        setInstitutes([]);
+        setPagination(null);
+        setError(fetchError?.response?.data?.message || "Unable to load institutes.");
+      })
+      .finally(() => {
+        if (active && requestId === requestIdRef.current) setLoading(false);
+      });
+    return () => { active = false; };
+  }, [scope.categoryId, scope.secondcategoryId, scope.subcategoryId, region, country, state, filter, page, showLocationFilter]);
+
+  const totalItems = Number(pagination?.total ?? pagination?.totalCount ?? 0);
+  const totalPages = Math.max(1, Number(pagination?.totalPages || Math.ceil(totalItems / pageSize) || 1));
+
   const filtered = institutes.filter((i) => {
     if (showLocationFilter) {
       const isIndia = normalizeCountryName(i.country) === "india";
       const matchesCountry = country === "India" ? isIndia : !isIndia;
-    const matchesState = !state || normalizeStateName(i.state) === normalizeStateName(state);
-      if (!matchesCountry || !matchesState) return false;
+      if (!matchesCountry) return false;
     }
-
-    const isGovt = String(i?.raw?.institute_type || "").toLowerCase().includes("gov");
-    const matchesType = filter === "all" ? true : filter === "govt" ? isGovt : !isGovt;
-
-    return matchesType;
+    return true;
   });
 
   return (
@@ -758,6 +753,7 @@ function InstituteFilterGroup({ institutes, badge, emptyText, showLocationFilter
               onChange={(e) => {
                 setCountry(e.target.value);
                 setState("");
+                setPage(1);
               }}
               className="border rounded px-3 py-2"
             >
@@ -767,7 +763,7 @@ function InstituteFilterGroup({ institutes, badge, emptyText, showLocationFilter
 
             <select
               value={state}
-              onChange={(e) => setState(e.target.value)}
+              onChange={(e) => { setState(e.target.value); setPage(1); }}
               className="border rounded px-3 py-2"
             >
               <option value="">Select State</option>
@@ -792,7 +788,7 @@ function InstituteFilterGroup({ institutes, badge, emptyText, showLocationFilter
         {["all", "govt", "private"].map((f) => (
           <button
             key={f}
-            onClick={() => setFilter(f)}
+            onClick={() => { setFilter(f); setPage(1); }}
             className={`rounded-full px-3 py-1 text-xs font-bold ${
               filter === f
                 ? "filter-pill-selected !bg-[#9a2119] !text-white"
@@ -803,24 +799,26 @@ function InstituteFilterGroup({ institutes, badge, emptyText, showLocationFilter
           </button>
         ))}
       </div>
-      {filtered.length ? (
+      {loading ? <p className="text-sm text-gray-500">Loading institutes…</p> : null}
+      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {!loading && filtered.length ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((inst) => (
             <InstituteCard key={inst.id} inst={inst} badge={badge} />
           ))}
         </div>
-      ) : (
+      ) : !loading && !error ? (
         <p className="text-sm text-gray-400">{emptyText}</p>
-      )}
+      ) : null}
       {totalPages > 1 && (
         <div className="mt-4 flex flex-wrap items-center gap-2" aria-label="Institute pages">
-          <button type="button" onClick={() => onPageChange(page - 1)} disabled={loadingMore || page <= 1} className="rounded-full border border-[#d7c3bc] px-4 py-2 text-sm font-bold text-[#9a2119] disabled:opacity-50">Previous</button>
+          <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={loading || page <= 1} className="rounded-full border border-[#d7c3bc] px-4 py-2 text-sm font-bold text-[#9a2119] disabled:opacity-50">Previous</button>
           {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
-            <button key={pageNumber} type="button" onClick={() => onPageChange(pageNumber)} disabled={loadingMore} aria-current={pageNumber === page ? "page" : undefined} className={`h-9 min-w-9 rounded-full border px-3 text-sm font-bold ${pageNumber === page ? "border-[#9a2119] bg-[#9a2119] text-white" : "border-[#d7c3bc] text-[#9a2119]"}`}>
+            <button key={pageNumber} type="button" onClick={() => setPage(pageNumber)} disabled={loading} aria-current={pageNumber === page ? "page" : undefined} className={`h-9 min-w-9 rounded-full border px-3 text-sm font-bold ${pageNumber === page ? "border-[#9a2119] bg-[#9a2119] text-white" : "border-[#d7c3bc] text-[#9a2119]"}`}>
               {pageNumber}
             </button>
           ))}
-          <button type="button" onClick={() => onPageChange(page + 1)} disabled={loadingMore || page >= totalPages} className="rounded-full border border-[#d7c3bc] px-4 py-2 text-sm font-bold text-[#9a2119] disabled:opacity-50">Next</button>
+          <button type="button" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={loading || page >= totalPages} className="rounded-full border border-[#d7c3bc] px-4 py-2 text-sm font-bold text-[#9a2119] disabled:opacity-50">Next</button>
         </div>
       )}
     </div>
@@ -841,7 +839,7 @@ function InstituteCard({ inst, badge }) {
     })
     : null;
   const stateName = inst?.state || inst?.raw?.state || "";
-  const isGovt = String(inst?.raw?.institute_type || "").toLowerCase().includes("gov");
+  const isGovt = String(inst?.type || inst?.raw?.institute_type || "").toLowerCase().includes("gov");
 
   return (
     <div className="group overflow-hidden rounded-[24px] border border-[#f0e4e2] bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-[#d7c3bc] hover:shadow-lg hover:shadow-[#9a2119]/10">
@@ -956,17 +954,6 @@ const [indiaStates, setIndiaStates] = useState([]);
   const [secondCategories, setSecondCategories] = useState([]);
   const [subCategories, setSubCategories] = useState([]);
   const [details, setDetails] = useState([]);
-  const [dynamicInstitutes, setDynamicInstitutes] = useState([]);
-  const [odishaInstitutes, setOdishaInstitutes] = useState([]);
-  const [outsideInstitutesPage, setOutsideInstitutesPage] = useState(1);
-  const [outsideInstitutesTotalPages, setOutsideInstitutesTotalPages] = useState(1);
-  const [institutesPage, setInstitutesPage] = useState(1);
-  const [institutesTotalPages, setInstitutesTotalPages] = useState(1);
-  const [institutesLoading, setInstitutesLoading] = useState(false);
-  const [outsideInstitutesLoading, setOutsideInstitutesLoading] = useState(false);
-  const [outsideInstitutesError, setOutsideInstitutesError] = useState("");
-  const [institutesError, setInstitutesError] = useState("");
-  const institutesRequestRef = useRef(0);
 
   const [detailReturnLevel, setDetailReturnLevel] = useState("streams");
   const [loading, setLoading] = useState(false);
@@ -999,81 +986,6 @@ const [indiaStates, setIndiaStates] = useState([]);
     secondcategoryId: selectedSecondCategory?.id || selectedSubCategory?.secondcategoryId || selectedDetailSource?.secondcategoryId || "",
     subcategoryId: selectedSubCategory?.id || selectedDetailSource?.subcategoryId || "",
   }), [selectedCategory?.id, selectedSecondCategory?.id, selectedSubCategory?.id, selectedDetailSource?.categoryId, selectedDetailSource?.secondcategoryId, selectedDetailSource?.subcategoryId]);
-
-  useEffect(() => {
-    if (currentLevel !== "details") return undefined;
-    const requestId = ++institutesRequestRef.current;
-    let active = true;
-    setDynamicInstitutes([]);
-    setOdishaInstitutes([]);
-    setOutsideInstitutesPage(1);
-    setInstitutesPage(1);
-    setOutsideInstitutesTotalPages(1);
-    setInstitutesTotalPages(1);
-    setInstitutesError("");
-    setInstitutesLoading(true);
-    setOutsideInstitutesLoading(true);
-    Promise.all([
-      getInstitutes({ ...instituteScope, page: 1, limit: 10 }),
-      getInstitutes({ ...instituteScope, page: 1, limit: 10, state: "Odisha" }),
-    ])
-      .then(([allResult, odishaResult]) => {
-        if (!active || requestId !== institutesRequestRef.current) return;
-        const odishaItems = odishaResult.items.filter((item) => isOdishaState(item.state));
-        const odishaIds = new Set(odishaItems.map((item) => String(item.id)));
-        setOdishaInstitutes(odishaItems);
-        setDynamicInstitutes(allResult.items.filter((item) => !isOdishaState(item.state) && !odishaIds.has(String(item.id))));
-        setOutsideInstitutesTotalPages(Math.max(1, Number(allResult.pagination?.totalPages || 1)));
-        setInstitutesTotalPages(Math.max(1, Number(odishaResult.pagination?.totalPages || 1)));
-      })
-      .catch(() => {
-        if (active && requestId === institutesRequestRef.current) setInstitutesError("Unable to load colleges right now.");
-      })
-      .finally(() => {
-        if (active && requestId === institutesRequestRef.current) {
-          setInstitutesLoading(false);
-          setOutsideInstitutesLoading(false);
-        }
-      });
-    return () => { active = false; };
-  }, [currentLevel, instituteScope]);
-
-  async function changeInstitutesPage(nextPage) {
-    if (institutesLoading || nextPage < 1 || nextPage > institutesTotalPages || nextPage === institutesPage) return;
-    const requestId = institutesRequestRef.current;
-    setInstitutesLoading(true);
-    setInstitutesError("");
-    try {
-      const result = await getInstitutes({ ...instituteScope, page: nextPage, limit: 10, state: "Odisha" });
-      if (requestId !== institutesRequestRef.current) return;
-      setOdishaInstitutes(result.items.filter((item) => isOdishaState(item.state)));
-      setInstitutesPage(nextPage);
-      setInstitutesTotalPages(Math.max(1, Number(result.pagination?.totalPages || institutesTotalPages)));
-    } catch (_error) {
-      if (requestId === institutesRequestRef.current) setInstitutesError("Unable to load colleges for this page. Please try again.");
-    } finally {
-      if (requestId === institutesRequestRef.current) setInstitutesLoading(false);
-    }
-  }
-
-  async function changeOutsideInstitutesPage(nextPage) {
-    if (outsideInstitutesLoading || nextPage < 1 || nextPage > outsideInstitutesTotalPages || nextPage === outsideInstitutesPage) return;
-    const requestId = institutesRequestRef.current;
-    setOutsideInstitutesLoading(true);
-    setOutsideInstitutesError("");
-    try {
-      const result = await getInstitutes({ ...instituteScope, page: nextPage, limit: 10 });
-      if (requestId !== institutesRequestRef.current) return;
-      const outsideItems = result.items.filter((item) => !isOdishaState(item.state));
-      setDynamicInstitutes(outsideItems);
-      setOutsideInstitutesPage(nextPage);
-      setOutsideInstitutesTotalPages(Math.max(1, Number(result.pagination?.totalPages || outsideInstitutesTotalPages)));
-    } catch (_error) {
-      if (requestId === institutesRequestRef.current) setOutsideInstitutesError("Unable to load colleges for this page. Please try again.");
-    } finally {
-      if (requestId === institutesRequestRef.current) setOutsideInstitutesLoading(false);
-    }
-  }
 
   useEffect(() => {
     if (CAREER_LIBRARY_MODULE_ID) return;
@@ -1926,22 +1838,15 @@ useEffect(() => {
   function renderDetailItem(detail, index) {
     const title = detail?.title || getItemTitle(detail);
     const Section = SectionCard;
-    const instituteGroups = {
-      outsideInstitutes: dynamicInstitutes,
-      topInstitutes: odishaInstitutes,
-    };
     const careerpaths = detail?.raw?.careerpaths || [];
     const entranceexams = detail?.raw?.entranceexams || [];
     const jobs = toList(detail?.jobs || detail?.jobScope);
     const salaryRanges = detail?.salaryRanges || [];
     const descriptionSections = getDetailDescriptionSections(detail);
-    const stateLabel = "Odisha";
     const hasCareerPath = careerpaths.length > 0 || detail?.path?.length > 0;
     const hasEntranceExams = entranceexams.length > 0 || toList(detail?.exams).length > 0;
     const hasJobs = jobs.length > 0;
     const hasSalary = salaryRanges.length > 0 || Boolean(detail?.salary);
-    const hasTopInstitutes = odishaInstitutes.length > 0 || institutesLoading || institutesError;
-
     const sidebarSections = [
       ...descriptionSections.map((item, itemIndex) => ({
         id: `desc-${index}-${item.id ?? itemIndex}`,
@@ -1952,9 +1857,8 @@ useEffect(() => {
       ...(hasEntranceExams ? [{ id: `exams-${index}`, label: "Entrance Exams", icon: <SolutionOutlined /> }] : []),
       ...(hasJobs ? [{ id: `jobs-${index}`, label: "Job Scopes", icon: <RocketOutlined /> }] : []),
       ...(hasSalary ? [{ id: `salary-${index}`, label: "Salary Range", icon: <DollarOutlined /> }] : []),
-        ...(instituteGroups.outsideInstitutes.length > 0 ? [{ id: `top-out-${index}`, label: `Institutes in INDIA`, icon: <EnvironmentOutlined /> }] : []),
-      ...(dynamicInstitutes.length > 0 || outsideInstitutesLoading ? [{ id: `top-out-${index}`, label: "Institutes outside Odisha", icon: <EnvironmentOutlined /> }] : []),
-      ...(hasTopInstitutes ? [{ id: `top-in-${index}`, label: `Institutes in ${stateLabel}`, icon: <BankOutlined /> }] : []),
+      { id: `top-out-${index}`, label: "Institutes outside Odisha", icon: <EnvironmentOutlined /> },
+      { id: `top-in-${index}`, label: "Institutes in Odisha", icon: <BankOutlined /> },
       ];
 
     function scrollTo(id) {
@@ -2260,46 +2164,22 @@ className="inline-flex h-10 w-10 items-center justify-center rounded-full border
                 )}
               </Section>
               ) : null}
-  {dynamicInstitutes.length > 0 || outsideInstitutesLoading ? (
               <Section
                 id={`top-out-${index}`}
                 icon={<EnvironmentOutlined />}
                 title="Institutes outside Odisha"
-                subtitle="Matching colleges outside Odisha, 10 per page."
+                subtitle="All matching colleges outside Odisha."
               >
-                {dynamicInstitutes.length > 0 ? (
-                  <InstituteFilterGroup
-                    institutes={dynamicInstitutes}
-                    emptyText="No colleges found outside Odisha."
-                    page={outsideInstitutesPage}
-                    totalPages={outsideInstitutesTotalPages}
-                    onPageChange={changeOutsideInstitutesPage}
-                    loadingMore={outsideInstitutesLoading}
-                  />
-                ) : null}
-                {outsideInstitutesLoading && dynamicInstitutes.length === 0 ? <p className="text-sm text-gray-500">Loading colleges…</p> : null}
-                {outsideInstitutesError ? <p className="text-sm text-red-600">{outsideInstitutesError}</p> : null}
+                <InstituteFilterGroup scope={instituteScope} region="outside" emptyText="No colleges found in outside Odisha." />
               </Section>
-              ) : null}
 
               <Section
                   id={`top-in-${index}`}
                   icon={<BankOutlined />}
                   title="Institutes in Odisha"
-                  subtitle="Matching Odisha colleges, 10 per page."
+                  subtitle="All matching Odisha colleges."
                 >
-                  {odishaInstitutes.length > 0 ? (
-                    <InstituteFilterGroup
-                      institutes={odishaInstitutes}
-                      emptyText="No Odisha colleges found."
-                      page={institutesPage}
-                      totalPages={institutesTotalPages}
-                      onPageChange={changeInstitutesPage}
-                      loadingMore={institutesLoading}
-                    />
-                  ) : !institutesLoading && !institutesError ? <p className="text-sm text-gray-400">No Odisha colleges found for this selection.</p> : null}
-                  {institutesLoading && odishaInstitutes.length === 0 ? <p className="text-sm text-gray-500">Loading Odisha colleges…</p> : null}
-                  {institutesError ? <p className="text-sm text-red-600">{institutesError}</p> : null}
+                  <InstituteFilterGroup scope={instituteScope} region="inside" badge="Odisha" emptyText="No Odisha colleges found." />
               </Section>
 
           </div>
