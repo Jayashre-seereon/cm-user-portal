@@ -6,7 +6,6 @@ import { getNotifications } from "../api/notificationApi";
 import { getMentorBookings, getSubscriptions, getTestHistory } from "../api/profile";
 
 const STORAGE_KEY = "careermap-userportal-state";
-const LEGACY_DEMO_EMAIL = "aarav.sharma@email.com";
 const emptyUserProfile = {
   name: "",
   email: "",
@@ -56,11 +55,7 @@ const initialState = {
     },
   },
   savedCareers: ["Software Engineering", "UX Design", "Psychology", "Digital Marketing"],
-  testHistory: [
-    { id: "1", title: "Personality Snapshot", subtitle: "Completed on 08 Apr 2026", status: "Completed" },
-    { id: "2", title: "Career Aptitude Test", subtitle: "Scheduled for 13 Apr 2026", status: "Upcoming" },
-    { id: "3", title: "Psychometric Summary", subtitle: "Available in reports", status: "Available" },
-  ],
+  testHistory: [],
   bookings: [
     { id: "1", mentorName: "Dr. Priya Sharma", date: "12 Apr 2026", time: "4:00 PM", status: "Confirmed" },
     { id: "2", mentorName: "Prof. Rahul Verma", date: "15 Apr 2026", time: "6:30 PM", status: "Upcoming" },
@@ -417,7 +412,7 @@ export function AppStateProvider({ children }) {
 
         setState((current) => ({
           ...current,
-          testHistory: testItems.length > 0 ? normalizeTestHistoryItems(testItems) : initialState.testHistory,
+          testHistory: normalizeTestHistoryItems(testItems),
           bookings: bookingItems.length > 0 ? normalizeBookingItems(bookingItems) : initialState.bookings,
           subscriptionRecords: normalizeSubscriptionItems(userSubscriptions),
           activePlanIds: freshActivePlanIds,
@@ -430,7 +425,7 @@ export function AppStateProvider({ children }) {
 
         setState((current) => ({
           ...current,
-          testHistory: initialState.testHistory,
+          testHistory: [],
           bookings: initialState.bookings,
           subscriptionRecords: initialState.subscriptionRecords,
           activePlanIds: [],
@@ -576,7 +571,7 @@ export function AppStateProvider({ children }) {
           setState((current) => ({
             ...current,
             dashboardData: dashboardResponse?.success ? dashboardResponse.data : current.dashboardData,
-            testHistory: testItems.length > 0 ? normalizeTestHistoryItems(testItems) : current.testHistory,
+            testHistory: normalizeTestHistoryItems(testItems),
             bookings: bookingItems.length > 0 ? normalizeBookingItems(bookingItems) : current.bookings,
             subscriptionRecords: normalizeSubscriptionItems(userSubscriptions),
             activePlanIds: freshActivePlanIds,

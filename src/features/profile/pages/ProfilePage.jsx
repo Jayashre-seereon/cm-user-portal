@@ -64,7 +64,7 @@ export default function ProfilePage() {
   const dobError = form.dob && !isValidDateInput(form.dob) ? "Date of birth must be in YYYY-MM-DD format." : "";
   const canSaveProfile = !form.dob || isValidDateInput(form.dob);
 
-  const scrollableCardClass = "h-[320px] overflow-y-auto scrollbar-hide";
+  const scrollableCardClass = "h-[320px] min-w-0 overflow-y-auto overflow-x-hidden scrollbar-hide";
 
   function buildEditForm(profile = userProfile) {
     return {
@@ -219,27 +219,27 @@ export default function ProfilePage() {
                   dataSource={subscriptionRecords}
                   className="w-full"
                   renderItem={(item) => (
-                    <div className="flex flex-col gap-4 rounded-2xl bg-gray-50 p-4 md:flex-row md:items-center md:justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="rounded-xl bg-brand/10 p-3">
+                    <div className="grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-3 rounded-2xl bg-gray-50 p-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-x-4 sm:p-4">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand/10">
                           <CreditCardOutlined className="text-xl text-brand" />
-                        </div>
-                        <div>
-                          <span className="block text-xs font-black uppercase tracking-[0.18em] text-brand">
+                      </div>
+                      <div className="min-w-0">
+                          <span className="block break-words text-xs font-black uppercase tracking-[0.14em] leading-tight text-brand sm:tracking-[0.18em]">
                             {item.subscriptionName || item.planName}
                           </span>
-                          <span className="text-sm font-bold text-ink">
+                          <span className="block text-sm font-bold text-ink">
                             {item.amount !== "" && item.amount != null ? `Rs ${item.amount}` : item.price}
                           </span>
+                      </div>
+                      <div className="col-start-2 flex min-w-0 items-center justify-between gap-2 sm:col-start-auto sm:justify-end sm:gap-3">
+                        <div className="min-w-0 text-left sm:text-right">
+                          <span className="block text-[10px] font-bold uppercase text-muted sm:text-xs">Validity</span>
+                          <span className="block break-words text-sm font-bold leading-tight text-ink">{item.validity || item.expiryDate}</span>
                         </div>
+                        <Tag color={String(item.status || "").toLowerCase() === "active" ? "green" : "default"} className={`!m-0 !shrink-0 !rounded-full !px-3 !font-bold uppercase ${String(item.status || "").toLowerCase() === "active" ? "" : "!border-gray-300 !bg-gray-200 !text-gray-600"}`}>
+                          {item.status || "Inactive"}
+                        </Tag>
                       </div>
-                      <div className="text-left md:text-right">
-                        <span className="block text-xs font-bold uppercase text-muted">Validity</span>
-                        <span className="font-bold text-ink">{item.validity || item.expiryDate}</span>
-                      </div>
-                      <Tag color="green" className="!m-0 !rounded-full !px-4 !font-bold uppercase">
-                        {item.status || "Active"}
-                      </Tag>
                     </div>
                   )}
                 />
@@ -277,10 +277,7 @@ export default function ProfilePage() {
                     <div className="flex flex-col">
                       <div className="text-sm font-bold text-ink">{item.quizName || item.title}</div>
                       <div className="mt-1 text-xs text-muted">
-                        {[
-                          item.score ? `Score: ${item.score}` : "",
-                          item.attemptedAt ? `Attempted: ${item.attemptedAt}` : item.subtitle,
-                        ]
+                        {[item.score ? `Score: ${item.score}` : "", item.attemptedAt ? `Attempted: ${item.attemptedAt}` : ""]
                           .filter(Boolean)
                           .join(" • ")}
                       </div>
@@ -307,10 +304,8 @@ export default function ProfilePage() {
                       <div className="text-sm font-bold text-ink">{item.mentorName}</div>
                       <div className="flex w-full justify-between gap-2">
                         <span className="text-xs italic text-muted">{item.timeSlot || item.time}</span>
-                        <span className="text-xs italic text-muted">
-                          {item.mentorFee ? `Fee: Rs ${item.mentorFee}` : item.date}
-                        </span>
-                        <Tag className="!m-0 !text-[10px]">{item.status}</Tag>
+                        <span className="text-xs italic text-muted">{item.mentorFee ? `Fee: Rs ${item.mentorFee}` : ""}</span>
+                        <span className="text-xs italic text-muted">{item.date}</span>
                       </div>
                     </div>
                   </List.Item>
