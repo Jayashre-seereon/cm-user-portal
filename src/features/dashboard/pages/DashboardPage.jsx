@@ -737,15 +737,8 @@ export default function DashboardPage() {
         <button
           key={plan.id}
           type="button"
-          onClick={() => {
-            if (!isCurrentPlan) {
-              navigate("/app/subscription");
-            }
-          }}
-          disabled={isCurrentPlan}
-          className={`group relative rounded-2xl border border-[#eee] bg-white p-5 text-left shadow-sm transition-all duration-300 overflow-hidden ${
-            isCurrentPlan ? "cursor-not-allowed opacity-75" : "hover:-translate-y-1 hover:shadow-xl"
-          }`}
+          onClick={() => navigate("/app/subscription")}
+          className="group relative rounded-2xl border border-[#eee] bg-white p-5 text-left shadow-sm transition-all duration-300 overflow-hidden hover:-translate-y-1 hover:shadow-xl"
         >
           {/* Top Glow Effect */}
           <div className="absolute inset-x-0 top-0 h-1 rounded-t-2xl bg-brand opacity-80"></div>
@@ -785,10 +778,10 @@ export default function DashboardPage() {
 
           {/* CTA */}
           <div className="mt-4 flex items-center justify-between text-sm font-semibold text-brand">
-            <span className={isCurrentPlan ? "text-green-400" : "group-hover:underline"}>
-              {isCurrentPlan ? "Current Plan" : "View Details"}
+            <span className="group-hover:underline">
+              View Details
             </span>
-            <RightOutlined className={isCurrentPlan ? "text-gray-300" : "transition-transform group-hover:translate-x-1"} />
+            <RightOutlined className="transition-transform group-hover:translate-x-1" />
           </div>
         </button>
       );
