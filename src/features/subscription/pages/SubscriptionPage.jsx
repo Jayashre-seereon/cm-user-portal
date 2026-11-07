@@ -261,19 +261,9 @@ export default function SubscriptionPage() {
                 } else {
                   buttonLabel = "Buy Retake / Subscribe Again";
                   buttonIcon = <RedoOutlined />;
-                  planStatusTag = (
-                    <Tag color="green" className="!rounded-full font-bold !m-0 !px-2.5 !py-0.5">
-                      Active Plan
-                    </Tag>
-                  );
                 }
               } else {
                 buttonLabel = "Renew / Subscribe Again";
-                planStatusTag = (
-                  <Tag color="green" className="!rounded-full font-bold !m-0 !px-2.5 !py-0.5">
-                    Active Plan
-                  </Tag>
-                );
               }
             }
 
