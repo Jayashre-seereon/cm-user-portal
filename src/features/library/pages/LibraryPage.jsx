@@ -46,6 +46,7 @@ import {
 } from "../../portal/components/portalPageShared";
 import { checkModuleAccess, startPreview, } from "../../../api/moduleAccessApi";
 import { getDashboard } from "../../../api/dashboardApi";
+import { getInstitutes } from "../../../api/instituteApi";
 import { useScrollToTopOnChange } from "../../../shared/useScrollToTopOnChange";
 
 const streamIcons = {
@@ -307,42 +308,6 @@ function normalizeCountryName(value = "") {
   return String(value).trim().toLowerCase();
 }
 
-function normalizeStateName(value = "") {
-  return String(value).trim().toLowerCase();
-}
-
-function groupInstitutesByTopStatus(value, targetState = "Odisha") {
-  const institutes = value || [];
-
-  const normalizedTargetState = normalizeStateName(targetState);
-
-  const sortTopFirst = (items) => {
-    return [...items].sort((a, b) => {
-      return Number(b.isTop) - Number(a.isTop);
-    });
-  };
-
-  const odishaInstitutes = institutes.filter(
-    (item) =>
-      normalizeStateName(item.state) === normalizedTargetState
-  );
-
-  const outsideInstitutes = institutes.filter(
-    (item) =>
-      normalizeStateName(item.state) !== normalizedTargetState
-  );
-
-  return {
-    institutes,
-
-    topInstitutes: sortTopFirst(odishaInstitutes),
-
-    outsideInstitutes: sortTopFirst(outsideInstitutes),
-
-    targetState,
-  };
-}
-
 function formatSalaryAmount(value) {
   const numericValue = Number(value);
   if (!Number.isFinite(numericValue)) return String(value ?? "");
@@ -602,7 +567,7 @@ function normalizeStreamKey(value) {
   return String(value || "")
     .toLowerCase()
     .replace(/&/g, "and")
-    .replace(/[^a-z0-9]/g, ""); // strips spaces, punctuation, special chars
+    .replace(/[^a-z0-9]/g, "");
 }
 
 function sortStreamsByPriority(items) {
@@ -611,7 +576,7 @@ function sortStreamsByPriority(items) {
     const bIndex = STREAM_ORDER.indexOf(normalizeStreamKey(b.name));
     const aRank = aIndex === -1 ? STREAM_ORDER.length : aIndex;
     const bRank = bIndex === -1 ? STREAM_ORDER.length : bIndex;
-    return aRank - bRank; // unranked items keep their relative order (stable sort) and land at the bottom
+    return aRank - bRank;
   });
 }
 
@@ -708,10 +673,17 @@ function SectionHeader({ icon, title }) {
     </div>
   );
 }
-function InstituteFilterGroup({ institutes, badge, emptyText, showLocationFilter = true }) {
+function InstituteFilterGroup({ scope, region, badge, emptyText, showLocationFilter = true }) {
   const [filter, setFilter] = useState("all");
   const [country, setCountry] = useState("India");
   const [state, setState] = useState("");
+  const [institutes, setInstitutes] = useState([]);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const requestIdRef = useRef(0);
+  const pageSize = 12;
 
   const india = Country.getCountryByCode("IN");
   const states = State.getStatesOfCountry(india.isoCode);
@@ -729,18 +701,46 @@ function InstituteFilterGroup({ institutes, badge, emptyText, showLocationFilter
     return result;
   }, [institutes]);
 
+  useEffect(() => {
+    const requestId = ++requestIdRef.current;
+    let active = true;
+    setLoading(true);
+    setError("");
+    getInstitutes({
+      ...scope,
+      page,
+      limit: pageSize,
+      region,
+      state: state || "",
+      type: filter === "govt" ? "Govt" : filter === "private" ? "Pvt" : "",
+    })
+      .then((result) => {
+        if (!active || requestId !== requestIdRef.current) return;
+        setInstitutes(result.items || []);
+        setPagination(result.pagination || null);
+      })
+      .catch((fetchError) => {
+        if (!active || requestId !== requestIdRef.current) return;
+        setInstitutes([]);
+        setPagination(null);
+        setError(fetchError?.response?.data?.message || "Unable to load institutes.");
+      })
+      .finally(() => {
+        if (active && requestId === requestIdRef.current) setLoading(false);
+      });
+    return () => { active = false; };
+  }, [scope.categoryId, scope.secondcategoryId, scope.subcategoryId, region, country, state, filter, page, showLocationFilter]);
+
+  const totalItems = Number(pagination?.total ?? pagination?.totalCount ?? 0);
+  const totalPages = Math.max(1, Number(pagination?.totalPages || Math.ceil(totalItems / pageSize) || 1));
+
   const filtered = institutes.filter((i) => {
     if (showLocationFilter) {
       const isIndia = normalizeCountryName(i.country) === "india";
       const matchesCountry = country === "India" ? isIndia : !isIndia;
-    const matchesState = !state || normalizeStateName(i.state) === normalizeStateName(state);
-      if (!matchesCountry || !matchesState) return false;
+      if (!matchesCountry) return false;
     }
-
-    const isGovt = String(i?.raw?.institute_type || "").toLowerCase().includes("gov");
-    const matchesType = filter === "all" ? true : filter === "govt" ? isGovt : !isGovt;
-
-    return matchesType;
+    return true;
   });
 
   return (
@@ -753,6 +753,7 @@ function InstituteFilterGroup({ institutes, badge, emptyText, showLocationFilter
               onChange={(e) => {
                 setCountry(e.target.value);
                 setState("");
+                setPage(1);
               }}
               className="border rounded px-3 py-2"
             >
@@ -762,7 +763,7 @@ function InstituteFilterGroup({ institutes, badge, emptyText, showLocationFilter
 
             <select
               value={state}
-              onChange={(e) => setState(e.target.value)}
+              onChange={(e) => { setState(e.target.value); setPage(1); }}
               className="border rounded px-3 py-2"
             >
               <option value="">Select State</option>
@@ -787,7 +788,7 @@ function InstituteFilterGroup({ institutes, badge, emptyText, showLocationFilter
         {["all", "govt", "private"].map((f) => (
           <button
             key={f}
-            onClick={() => setFilter(f)}
+            onClick={() => { setFilter(f); setPage(1); }}
             className={`rounded-full px-3 py-1 text-xs font-bold ${
               filter === f
                 ? "filter-pill-selected !bg-[#9a2119] !text-white"
@@ -798,14 +799,27 @@ function InstituteFilterGroup({ institutes, badge, emptyText, showLocationFilter
           </button>
         ))}
       </div>
-      {filtered.length ? (
+      {loading ? <p className="text-sm text-gray-500">Loading institutes…</p> : null}
+      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {!loading && filtered.length ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((inst) => (
             <InstituteCard key={inst.id} inst={inst} badge={badge} />
           ))}
         </div>
-      ) : (
+      ) : !loading && !error ? (
         <p className="text-sm text-gray-400">{emptyText}</p>
+      ) : null}
+      {totalPages > 1 && (
+        <div className="mt-4 flex flex-wrap items-center gap-2" aria-label="Institute pages">
+          <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={loading || page <= 1} className="rounded-full border border-[#d7c3bc] px-4 py-2 text-sm font-bold text-[#9a2119] disabled:opacity-50">Previous</button>
+          {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
+            <button key={pageNumber} type="button" onClick={() => setPage(pageNumber)} disabled={loading} aria-current={pageNumber === page ? "page" : undefined} className={`h-9 min-w-9 rounded-full border px-3 text-sm font-bold ${pageNumber === page ? "border-[#9a2119] bg-[#9a2119] text-white" : "border-[#d7c3bc] text-[#9a2119]"}`}>
+              {pageNumber}
+            </button>
+          ))}
+          <button type="button" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={loading || page >= totalPages} className="rounded-full border border-[#d7c3bc] px-4 py-2 text-sm font-bold text-[#9a2119] disabled:opacity-50">Next</button>
+        </div>
       )}
     </div>
   );
@@ -825,7 +839,7 @@ function InstituteCard({ inst, badge }) {
     })
     : null;
   const stateName = inst?.state || inst?.raw?.state || "";
-  const isGovt = String(inst?.raw?.institute_type || "").toLowerCase().includes("gov");
+  const isGovt = String(inst?.type || inst?.raw?.institute_type || "").toLowerCase().includes("gov");
 
   return (
     <div className="group overflow-hidden rounded-[24px] border border-[#f0e4e2] bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-[#d7c3bc] hover:shadow-lg hover:shadow-[#9a2119]/10">
@@ -966,6 +980,12 @@ const [indiaStates, setIndiaStates] = useState([]);
 
   const [previewExpired, setPreviewExpired] = useState(false);
   const hasSubscriptionAccess = accessStatus === "unlocked";
+
+  const instituteScope = useMemo(() => ({
+    categoryId: selectedCategory?.id || selectedSecondCategory?.categoryId || selectedSubCategory?.categoryId || selectedDetailSource?.categoryId || "",
+    secondcategoryId: selectedSecondCategory?.id || selectedSubCategory?.secondcategoryId || selectedDetailSource?.secondcategoryId || "",
+    subcategoryId: selectedSubCategory?.id || selectedDetailSource?.subcategoryId || "",
+  }), [selectedCategory?.id, selectedSecondCategory?.id, selectedSubCategory?.id, selectedDetailSource?.categoryId, selectedDetailSource?.secondcategoryId, selectedDetailSource?.subcategoryId]);
 
   useEffect(() => {
     if (CAREER_LIBRARY_MODULE_ID) return;
@@ -1818,19 +1838,15 @@ useEffect(() => {
   function renderDetailItem(detail, index) {
     const title = detail?.title || getItemTitle(detail);
     const Section = SectionCard;
-    const instituteGroups = groupInstitutesByTopStatus(detail?.institutes, "Odisha");
     const careerpaths = detail?.raw?.careerpaths || [];
     const entranceexams = detail?.raw?.entranceexams || [];
     const jobs = toList(detail?.jobs || detail?.jobScope);
     const salaryRanges = detail?.salaryRanges || [];
     const descriptionSections = getDetailDescriptionSections(detail);
-    const stateLabel = "Odisha";
     const hasCareerPath = careerpaths.length > 0 || detail?.path?.length > 0;
     const hasEntranceExams = entranceexams.length > 0 || toList(detail?.exams).length > 0;
     const hasJobs = jobs.length > 0;
     const hasSalary = salaryRanges.length > 0 || Boolean(detail?.salary);
-    const hasTopInstitutes = instituteGroups.topInstitutes.length > 0 || instituteGroups.outsideInstitutes.length > 0;
-
     const sidebarSections = [
       ...descriptionSections.map((item, itemIndex) => ({
         id: `desc-${index}-${item.id ?? itemIndex}`,
@@ -1841,8 +1857,8 @@ useEffect(() => {
       ...(hasEntranceExams ? [{ id: `exams-${index}`, label: "Entrance Exams", icon: <SolutionOutlined /> }] : []),
       ...(hasJobs ? [{ id: `jobs-${index}`, label: "Job Scopes", icon: <RocketOutlined /> }] : []),
       ...(hasSalary ? [{ id: `salary-${index}`, label: "Salary Range", icon: <DollarOutlined /> }] : []),
-        ...(instituteGroups.outsideInstitutes.length > 0 ? [{ id: `top-out-${index}`, label: `Institutes in INDIA`, icon: <EnvironmentOutlined /> }] : []),
-      ...(hasTopInstitutes ? [{ id: `top-in-${index}`, label: `Institutes in ${stateLabel}`, icon: <BankOutlined /> }] : []),
+      { id: `top-out-${index}`, label: "Institutes outside Odisha", icon: <EnvironmentOutlined /> },
+      { id: `top-in-${index}`, label: "Institutes in Odisha", icon: <BankOutlined /> },
       ];
 
     function scrollTo(id) {
@@ -1947,7 +1963,7 @@ useEffect(() => {
                         {careerpaths.map((cp, cpIdx) => (
                           <tr key={cp?.id ?? cpIdx} className={cpIdx % 2 === 0 ? "bg-white" : "bg-[#fdf9f9]"}>
                             <td className="whitespace-nowrap border-b border-[#f7eeec] px-4 py-3 font-semibold text-[#9a2119]">
-                              {cp?.path?.pathtype || cp?.pathName || `Path ${cpIdx + 1}`}
+                              {`Path ${cpIdx + 1}`}
                             </td>
                             <td className="border-b border-[#f7eeec] px-4 py-3 text-[#62585c]">
                               {cp?.stream || "—"}
@@ -2148,39 +2164,23 @@ className="inline-flex h-10 w-10 items-center justify-center rounded-full border
                 )}
               </Section>
               ) : null}
-  {instituteGroups.outsideInstitutes.length > 0 ? (
               <Section
                 id={`top-out-${index}`}
                 icon={<EnvironmentOutlined />}
-                title="Institutes in INDIA
-"
-                subtitle="All institutes from other states are shown here."
+                title="Institutes outside Odisha"
+                subtitle="All matching colleges outside Odisha."
               >
-                <InstituteFilterGroup
-                  institutes={instituteGroups.outsideInstitutes}
-               
-                  emptyText="No institutes found outside Odisha."
-                />
+                <InstituteFilterGroup scope={instituteScope} region="outside" emptyText="No colleges found in outside Odisha." />
               </Section>
-              ) : null}
 
-              {instituteGroups.topInstitutes.length > 0 ? (
               <Section
-                id={`top-in-${index}`}
-                icon={<BankOutlined />}
-                title="Institutes in Odisha"
-                subtitle="Institutes in Odisha highlighted from this career map data."
-              >
-                <InstituteFilterGroup
-                  institutes={instituteGroups.topInstitutes}
-                 
-                  emptyText="No Odisha institutes found."
-                  showLocationFilter={false}
-                />
+                  id={`top-in-${index}`}
+                  icon={<BankOutlined />}
+                  title="Institutes in Odisha"
+                  subtitle="All matching Odisha colleges."
+                >
+                  <InstituteFilterGroup scope={instituteScope} region="inside" badge="Odisha" emptyText="No Odisha colleges found." />
               </Section>
-              ) : null}
-
-            
 
           </div>
         </div>

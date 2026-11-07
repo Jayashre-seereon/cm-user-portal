@@ -21,14 +21,6 @@ const { Option } = Select;
 const normalizeExamSearch = (value = "") =>
   String(value).toLocaleLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "");
 
-const getExamFamily = (value = "") => {
-  const normalized = normalizeExamSearch(value);
-  // Keep the exam family prefix (such as CUETPG or CUETUG), while allowing
-  // variants like "CUET PG - MBA" and "CUET PG (Common...)" to group together.
-  const family = normalized.match(/^(cuet(?:pg|ug)|neet(?:pg|ug)|jee(?:main|advanced)|gate|cat|clat|upsc|ssc|ibps|nda|nata|bitsat|cet)/);
-  return family?.[1] || normalized;
-};
-
 const isDeadlineComingSoon = (value) => {
   if (!value) return false;
   const deadline = new Date(value);
@@ -196,13 +188,11 @@ useEffect(() => {
 const examOptions = useMemo(() => {
   const seen = new Set();
   return items.flatMap((item) => {
-    const family = getExamFamily(item.name);
-    if (!family || seen.has(family)) return [];
-    seen.add(family);
-    const familyNames = items
-      .filter((candidate) => getExamFamily(candidate.name) === family)
-      .map((candidate) => candidate.name);
-    return [{ value: family, label: familyNames.length > 1 ? `${item.name.split(/[\s(–—-]/)[0]} ${item.name.toUpperCase().includes("PG") ? "PG" : "UG"}` : item.name }];
+    const name = String(item?.name || "").trim();
+    const normalizedName = normalizeExamSearch(name);
+    if (!name || seen.has(normalizedName)) return [];
+    seen.add(normalizedName);
+    return [{ value: String(item.id), label: name }];
   });
 }, [items]);
 function scrollToSection(id) {
@@ -249,7 +239,7 @@ const filtered = useMemo(
 
       const matchesExam =
         !selectedExamId ||
-        getExamFamily(item.name) === String(selectedExamId);
+        String(item.id) === String(selectedExamId);
 
       const matchesMode =
         !mode ||
@@ -491,7 +481,7 @@ if (selectedExam) {
       placeholder="Search Exam"
       optionFilterProp="label"
       filterOption={(input, option) =>
-        normalizeExamSearch(option?.label).includes(normalizeExamSearch(input))
+        normalizeExamSearch(`${option?.label || ""} ${option?.searchText || ""}`).includes(normalizeExamSearch(input))
       }
       value={selectedExamId || undefined}
       onChange={(value) => setSelectedExamId(value || "")}

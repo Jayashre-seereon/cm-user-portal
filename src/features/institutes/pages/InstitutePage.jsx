@@ -27,13 +27,13 @@ function getInitials(name = "") {
 }
 
 function getAccentByType(type = "") {
-  const t = String(type).toLowerCase();
+  const t = String(type).trim().toLowerCase();
 
-  if (t.includes("government")) {
+  if (["government", "govt", "gov", "public"].some((label) => t.includes(label))) {
     return "from-[#b42117] to-[#9a2119]";
   }
 
-  if (t.includes("private")) {
+  if (t.includes("private") || t === "pvt" || t.startsWith("pvt ")) {
     return "from-[#ff7b12] to-[#c84f15]";
   }
 
