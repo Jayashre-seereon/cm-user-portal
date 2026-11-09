@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Select } from "antd";
 import {
   EnvironmentOutlined,
+  LeftOutlined,
   RightOutlined,
   LockOutlined,
   UnlockOutlined,
@@ -736,6 +737,7 @@ export default function InstitutePage() {
       {pagination &&
         pagination.totalPages > 1 && (
           <div className="flex items-center justify-center gap-3 py-6">
+            <Button aria-label="First page" disabled={!pagination.hasPreviousPage || loading} onClick={() => setPage(1)}>« First</Button>
             <Button
               disabled={
                 !pagination.hasPreviousPage ||
@@ -747,7 +749,7 @@ export default function InstitutePage() {
                 )
               }
             >
-              Previous
+              <span className="inline-flex items-center gap-1"><LeftOutlined /> Previous</span>
             </Button>
 
             <span className="text-sm font-semibold">
@@ -764,8 +766,9 @@ export default function InstitutePage() {
                 setPage((prev) => prev + 1)
               }
             >
-              Next
+              <span className="inline-flex items-center gap-1">Next <RightOutlined /></span>
             </Button>
+            <Button aria-label="Last page" disabled={!pagination.hasNextPage || loading} onClick={() => setPage(pagination.totalPages)}>Last »</Button>
           </div>
         )}
 

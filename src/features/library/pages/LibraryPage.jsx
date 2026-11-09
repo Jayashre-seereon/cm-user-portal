@@ -811,14 +811,12 @@ function InstituteFilterGroup({ scope, region, badge, emptyText, showLocationFil
         <p className="text-sm text-gray-400">{emptyText}</p>
       ) : null}
       {totalPages > 1 && (
-        <div className="mt-4 flex flex-wrap items-center gap-2" aria-label="Institute pages">
-          <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={loading || page <= 1} className="rounded-full border border-[#d7c3bc] px-4 py-2 text-sm font-bold text-[#9a2119] disabled:opacity-50">Previous</button>
-          {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
-            <button key={pageNumber} type="button" onClick={() => setPage(pageNumber)} disabled={loading} aria-current={pageNumber === page ? "page" : undefined} className={`h-9 min-w-9 rounded-full border px-3 text-sm font-bold ${pageNumber === page ? "border-[#9a2119] bg-[#9a2119] text-white" : "border-[#d7c3bc] text-[#9a2119]"}`}>
-              {pageNumber}
-            </button>
-          ))}
-          <button type="button" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={loading || page >= totalPages} className="rounded-full border border-[#d7c3bc] px-4 py-2 text-sm font-bold text-[#9a2119] disabled:opacity-50">Next</button>
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-2" aria-label="Institute pages">
+          <button type="button" onClick={() => setPage(1)} disabled={loading || page <= 1} aria-label="First page" className="h-9 rounded-full border border-[#d7c3bc] px-3 text-sm font-bold text-[#9a2119] disabled:opacity-40">« First</button>
+          <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={loading || page <= 1} aria-label="Previous page" className="h-9 w-9 rounded-full border border-[#d7c3bc] text-lg font-bold text-[#9a2119] disabled:opacity-40">‹</button>
+          <span className="px-1 text-xs font-semibold text-[#6d514b]">Page {page} of {totalPages}</span>
+          <button type="button" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={loading || page >= totalPages} aria-label="Next page" className="h-9 w-9 rounded-full border border-[#d7c3bc] text-lg font-bold text-[#9a2119] disabled:opacity-40">›</button>
+          <button type="button" onClick={() => setPage(totalPages)} disabled={loading || page >= totalPages} aria-label="Last page" className="h-9 rounded-full border border-[#d7c3bc] px-3 text-sm font-bold text-[#9a2119] disabled:opacity-40">Last »</button>
         </div>
       )}
     </div>
@@ -2179,7 +2177,7 @@ className="inline-flex h-10 w-10 items-center justify-center rounded-full border
                   title="Institutes in Odisha"
                   subtitle="All matching Odisha colleges."
                 >
-                  <InstituteFilterGroup scope={instituteScope} region="inside" badge="Odisha" emptyText="No Odisha colleges found." />
+                  <InstituteFilterGroup scope={instituteScope} region="inside" badge="Odisha" emptyText="No Odisha colleges found." showLocationFilter={false} />
               </Section>
 
           </div>
