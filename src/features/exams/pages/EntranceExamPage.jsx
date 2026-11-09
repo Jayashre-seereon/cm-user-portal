@@ -33,6 +33,13 @@ const isDeadlineComingSoon = (value) => {
   return today >= monthBeforeDeadline && today < deadline;
 };
 
+const shouldShowMonthYear = (exam) => String(exam?.eligibility).trim().toLowerCase() === "true";
+const formatExamApplicationDate = (value, exam) => {
+  if (!shouldShowMonthYear(exam) || !value || value === "Date not available") return value;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+};
+
 
 export default function EntranceExamPage() {
   const { goToDashboard } = usePortalNavigation();
@@ -341,12 +348,12 @@ if (selectedExam) {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">
                   <CalendarOutlined />
-                  Issue: {selectedExam.issueDate}
+                  Issue: {formatExamApplicationDate(selectedExam.issueDate, selectedExam)}
                 </span>
 
                 <span className="inline-flex items-center gap-1 rounded-full bg-[#fdf0ee] px-3 py-1.5 text-xs font-semibold text-[#9a2119]">
                   <CalendarOutlined />
-                  Last Date: {selectedExam.lastDate}
+                  Last Date: {formatExamApplicationDate(selectedExam.lastDate, selectedExam)}
                 </span>
               </div>
             </div>
@@ -563,11 +570,11 @@ if (selectedExam) {
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
                   <CalendarOutlined className="text-[10px]" />
-                  Issue: {item.issueDate}
+                  Issue: {formatExamApplicationDate(item.issueDate, item)}
                 </span>
                 <span className="inline-flex items-center gap-1 rounded-full bg-[#fdf0ee] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#9a2119]">
                   <CalendarOutlined className="text-[10px]" />
-                  Last: {item.lastDate}
+                  Last: {formatExamApplicationDate(item.lastDate, item)}
                 </span>
               </div>
 <div className="mt-auto flex items-center justify-between border-t border-[#f0e4e2] pt-3">
