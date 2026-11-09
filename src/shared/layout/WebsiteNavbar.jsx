@@ -56,7 +56,7 @@ export default function WebsiteNavbar() {
     items: moduleItems.map((item) => ({ key: item.key, icon: item.icon, label: item.label })),
     selectedKeys: [location.pathname],
     onClick: ({ key }) => handleModuleNavClick(key),
-    className: "!grid !grid-cols-2 !gap-0 !min-w-[320px] !rounded-2xl !p-1.5 !shadow-lg md:!min-w-[360px]",
+    className: "!grid !grid-cols-1 !gap-0 !w-[min(88vw,320px)] !min-w-0 !rounded-2xl !p-1.5 !shadow-lg sm:!grid-cols-2 sm:!w-[360px]",
   };
 
   const profileMenuItems = [
@@ -160,17 +160,17 @@ export default function WebsiteNavbar() {
   return (
     <header className="sticky top-0 z-30 border-b border-[#eaded9] bg-white/95 backdrop-blur">
       <div className="mx-auto max-w-[1280px] px-3 md:px-6">
-        <div className="flex min-h-14 items-center justify-between gap-3 py-2">
-          <div className="flex min-w-0 flex-1 items-center gap-3 md:gap-5">
+        <div className="flex min-h-14 items-center justify-between gap-1.5 py-2 sm:gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-3 md:gap-5">
             <Link to="/app/dashboard" className="shrink-0">
-              <BrandMark />
+              <span className="[&_img]:!h-9 [&_img]:!max-w-[104px] sm:[&_img]:!h-10 sm:[&_img]:!max-w-[120px] md:[&_img]:!h-14 md:[&_img]:!max-w-[190px]"><BrandMark /></span>
             </Link>
 
-            <nav className="min-w-0 flex-1 overflow-x-auto">
+            <nav className="min-w-0 flex-1">
               <div className="flex items-center gap-1 whitespace-nowrap">
                 <Link
                   to="/app/dashboard"
-                  className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[14px] font-medium transition-colors ${
+                  className={`hidden shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[14px] font-medium transition-colors md:flex ${
                     location.pathname === "/app/dashboard"
                       ? "bg-[#fdf0ed] text-brand"
                       : "text-[#4b3d47] hover:bg-[#faf4f2] hover:text-brand"
@@ -183,13 +183,14 @@ export default function WebsiteNavbar() {
                 <Dropdown menu={moduleMenu} trigger={["click", "hover"]}>
                   <button
                     type="button"
-                    className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[14px] font-medium transition-colors ${
+                    className={`flex shrink-0 items-center gap-1 rounded-lg px-1.5 py-1.5 text-[12px] font-semibold transition-colors sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-[14px] ${
                       moduleItems.some((item) => item.key === location.pathname)
                         ? "bg-[#fdf0ed] text-brand"
                         : "text-[#4b3d47] hover:bg-[#faf4f2] hover:text-brand"
                     }`}
                   >
-                    Modules
+                    <AppstoreOutlined className="text-[11px] sm:text-[13px]" />
+                    <span>Modules</span>
                     <DownOutlined className="text-[11px] opacity-60" />
                   </button>
                 </Dropdown>
@@ -202,12 +203,12 @@ export default function WebsiteNavbar() {
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             {/* Mobile Search Toggle */}
             <button
               type="button"
               onClick={() => setMobileSearchOpen((prev) => !prev)}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#eaded9] bg-[#faf4f2] text-[#9a2119] transition hover:border-[#d8b4ad] lg:hidden"
+              className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#eaded9] bg-[#faf4f2] text-[#9a2119] transition hover:border-[#d8b4ad] sm:h-8 sm:w-8 lg:hidden"
               title="Search"
             >
               <SearchOutlined className="text-[14px]" />
@@ -223,7 +224,7 @@ export default function WebsiteNavbar() {
             >
               <Badge count={unreadNotificationsCount} size="small" offset={[-2, 2]}>
                 <Button
-                  className="!flex !h-8 !w-8 !items-center !justify-center !rounded-lg !border-[#9a2119] !bg-[#faf4f2] !text-[#9a2119] hover:!border-[#d8b4ad] hover:!text-brand"
+                  className="!flex !h-7 !w-7 !items-center !justify-center !rounded-lg !border-[#9a2119] !bg-[#faf4f2] !text-[#9a2119] hover:!border-[#d8b4ad] hover:!text-brand sm:!h-8 sm:!w-8"
                   icon={<BellOutlined />}
                 />
               </Badge>
@@ -252,9 +253,9 @@ export default function WebsiteNavbar() {
               trigger={["click"]}
               placement="bottomRight"
             >
-              <button type="button" className="flex items-center gap-2 px-1 py-1">
+              <button type="button" className="flex items-center gap-1 px-0.5 py-1 sm:gap-2 sm:px-1">
                 <Avatar
-                  size={28}
+                  size={26}
                   icon={<UserOutlined />}
                   style={{ backgroundColor: "#9a2119", borderRadius: 6 }}
                 />
