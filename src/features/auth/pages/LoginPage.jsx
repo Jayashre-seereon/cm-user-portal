@@ -20,7 +20,6 @@ export default function LoginPage() {
   const setSignupForm = useAuthStore((state) => state.setSignupForm);
   const setOnboardingData = useAuthStore((state) => state.setOnboardingData);
   const setAuthSession = useAuthStore((state) => state.setAuthSession);
-  const setPendingInstituteOnboarding = useAuthStore((state) => state.setPendingInstituteOnboarding);
   const clearAuthFlow = useAuthStore((state) => state.clearAuthFlow);
   const isExistingUser = params.get("userType") === "existing";
   const initialMode = isExistingUser && params.get("mode") === "email" ? "email" : "mobile";
@@ -45,7 +44,6 @@ export default function LoginPage() {
 
   function completeLogin(response) {
     const profileIncomplete = Boolean(response?.profileIncomplete);
-    const requiresInstituteOnboarding = Boolean(response?.user?.isInstituteStudent) && !profileIncomplete;
 
     setAuthSession({
       accessToken: response.accessToken || "",
@@ -63,9 +61,8 @@ export default function LoginPage() {
       : "/app/dashboard";
 
     setProfileIncomplete(profileIncomplete);
-    setPendingInstituteOnboarding(requiresInstituteOnboarding);
     clearAuthFlow();
-    navigate(requiresInstituteOnboarding ? "/onboarding" : destination, { replace: true });
+    navigate(destination, { replace: true });
   }
 
   async function handleSendOtp() {
@@ -258,7 +255,7 @@ export default function LoginPage() {
           <div style={{ marginBottom: "6px" }}>
             {isExistingUser ? (
               <Link to="/onboarding?source=auth-entry" style={{ color: "#9a2119", fontWeight: "600" }}>
-                New user? Start onboarding
+                New user?
               </Link>
             ) : (
               <Link to="/auth-entry" style={{ color: "#9a2119", fontWeight: "600" }}>
