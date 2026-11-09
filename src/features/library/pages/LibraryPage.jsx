@@ -812,11 +812,9 @@ function InstituteFilterGroup({ scope, region, badge, emptyText, showLocationFil
       ) : null}
       {totalPages > 1 && (
         <div className="mt-5 flex flex-wrap items-center justify-center gap-2" aria-label="Institute pages">
-          <button type="button" onClick={() => setPage(1)} disabled={loading || page <= 1} aria-label="First page" className="h-9 rounded-full border border-[#d7c3bc] px-3 text-sm font-bold text-[#9a2119] disabled:opacity-40">« First</button>
           <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={loading || page <= 1} aria-label="Previous page" className="h-9 w-9 rounded-full border border-[#d7c3bc] text-lg font-bold text-[#9a2119] disabled:opacity-40">‹</button>
           <span className="px-1 text-xs font-semibold text-[#6d514b]">Page {page} of {totalPages}</span>
           <button type="button" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={loading || page >= totalPages} aria-label="Next page" className="h-9 w-9 rounded-full border border-[#d7c3bc] text-lg font-bold text-[#9a2119] disabled:opacity-40">›</button>
-          <button type="button" onClick={() => setPage(totalPages)} disabled={loading || page >= totalPages} aria-label="Last page" className="h-9 rounded-full border border-[#d7c3bc] px-3 text-sm font-bold text-[#9a2119] disabled:opacity-40">Last »</button>
         </div>
       )}
     </div>

@@ -737,7 +737,6 @@ export default function InstitutePage() {
       {pagination &&
         pagination.totalPages > 1 && (
           <div className="flex items-center justify-center gap-3 py-6">
-            <Button aria-label="First page" disabled={!pagination.hasPreviousPage || loading} onClick={() => setPage(1)}>« First</Button>
             <Button
               disabled={
                 !pagination.hasPreviousPage ||
@@ -768,7 +767,6 @@ export default function InstitutePage() {
             >
               <span className="inline-flex items-center gap-1">Next <RightOutlined /></span>
             </Button>
-            <Button aria-label="Last page" disabled={!pagination.hasNextPage || loading} onClick={() => setPage(pagination.totalPages)}>Last »</Button>
           </div>
         )}
 
