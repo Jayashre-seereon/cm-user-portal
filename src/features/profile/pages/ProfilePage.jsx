@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Avatar, Alert, Button, Col, Form, Input, List, Modal, Row, Space, Tag, message } from "antd";
+import { Avatar, Alert, Button, Col, DatePicker, Form, Input, List, Modal, Row, Space, Tag, message } from "antd";
 import {
   BookOutlined,
   CalendarOutlined,
@@ -17,6 +17,7 @@ import { useAppState } from "../../../state/AppStateContext";
 import { usePortalNavigation } from "../../portal/components/portalPageShared";
 import { buildUsername, isValidDateInput, mapApiUserToProfile, splitFullName } from "../../../utils/auth";
 import { useLocation } from "react-router-dom";
+import dayjs from "dayjs";
 
 export default function ProfilePage() {
   const {
@@ -83,18 +84,19 @@ export default function ProfilePage() {
 
   function formatDobForDisplay(value = "") {
     const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    return match ? `${match[3]}/${match[2]}/${match[1]}` : String(value);
-  }
-
-  function normalizeDobInput(value = "") {
-    const digits = String(value).replace(/\D/g, "").slice(0, 8);
-    return [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean).join("/");
+    if (match) return `${match[3]}/${match[2]}/${match[1]}`;
+    const apiMatch = String(value).match(/^(\d{2})-(\d{2})-(\d{4})$/);
+    return apiMatch ? `${apiMatch[1]}/${apiMatch[2]}/${apiMatch[3]}` : String(value);
   }
 
   function dobToIso(value = "") {
     const match = String(value).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-    if (!match) return "";
-    const iso = `${match[3]}-${match[2]}-${match[1]}`;
+    const isoMatch = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const iso = match
+      ? `${match[3]}-${match[2]}-${match[1]}`
+      : isoMatch
+        ? String(value)
+        : "";
     return isValidDateInput(iso) ? iso : "";
   }
 
@@ -381,22 +383,29 @@ export default function ProfilePage() {
                     key={key}
                     className="!mb-0"
                   >
-                    <Input
-                      value={key === "dob" ? formatDobForDisplay(form[key] || "") : form[key] || ""}
+                    {key === "dob" ? (
+                      <DatePicker
+                        value={dobToIso(form.dob) ? dayjs(dobToIso(form.dob), "YYYY-MM-DD") : null}
+                        format="DD/MM/YYYY"
+                        placeholder="DD/MM/YYYY"
+                        inputReadOnly
+                        className="!h-12 !w-full !rounded-2xl !border-[#e1d6cf] !bg-white !px-4 !text-[14px]"
+                        onChange={(date) => setForm((current) => ({
+                          ...current,
+                          dob: date ? date.format("DD/MM/YYYY") : "",
+                        }))}
+                        disabledDate={(date) => date && date.isAfter(dayjs(), "day")}
+                      />
+                    ) : <Input
+                      value={form[key] || ""}
                       disabled={key === "email" || key === "mobile"}
                       placeholder={`Enter ${String(label).toLowerCase()}`}
                       className="!h-12 !rounded-2xl !border-[#e1d6cf] !bg-white !px-4 !text-[14px]"
-                      onChange={(event) => {
-                        const displayValue = key === "dob" ? normalizeDobInput(event.target.value) : event.target.value;
-                        const match = key === "dob" ? displayValue.match(/^(\d{2})\/(\d{2})\/(\d{4})$/) : null;
-                        const nextValue = match ? `${match[3]}-${match[2]}-${match[1]}` : displayValue;
-                        setForm((current) => ({ ...current, [key]: nextValue }));
-                      }}
+                      onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))}
                       type="text"
                       inputMode={key === "dob" ? "numeric" : undefined}
                       autoComplete={key === "dob" ? "bday" : undefined}
-                      maxLength={key === "dob" ? 10 : undefined}
-                    />
+                    />}
                     {key === "email" || key === "mobile" ? (
                       <div className="mt-2 text-[12px] text-[#8a7f78]">Can&apos;t edit</div>
                     ) : null}
