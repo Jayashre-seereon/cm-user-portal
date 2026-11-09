@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Select } from "antd";
 import {
   EnvironmentOutlined,
+  LeftOutlined,
   RightOutlined,
   LockOutlined,
   UnlockOutlined,
@@ -747,7 +748,7 @@ export default function InstitutePage() {
                 )
               }
             >
-              Previous
+              <span className="inline-flex items-center gap-1"><LeftOutlined /> Previous</span>
             </Button>
 
             <span className="text-sm font-semibold">
@@ -764,7 +765,7 @@ export default function InstitutePage() {
                 setPage((prev) => prev + 1)
               }
             >
-              Next
+              <span className="inline-flex items-center gap-1">Next <RightOutlined /></span>
             </Button>
           </div>
         )}

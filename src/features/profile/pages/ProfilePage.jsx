@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Avatar, Alert, Button, Col, Form, Input, List, Modal, Row, Space, Tag, message } from "antd";
+import { Avatar, Alert, Button, Col, DatePicker, Form, Input, List, Modal, Row, Space, Tag, message } from "antd";
 import {
   BookOutlined,
   CalendarOutlined,
@@ -17,6 +17,7 @@ import { useAppState } from "../../../state/AppStateContext";
 import { usePortalNavigation } from "../../portal/components/portalPageShared";
 import { buildUsername, isValidDateInput, mapApiUserToProfile, splitFullName } from "../../../utils/auth";
 import { useLocation } from "react-router-dom";
+import dayjs from "dayjs";
 
 export default function ProfilePage() {
   const {
@@ -61,8 +62,8 @@ export default function ProfilePage() {
 
   const profileName = useMemo(() => userProfile.name || "Your profile", [userProfile.name]);
   const profileEmail = useMemo(() => userProfile.email || "No email added yet", [userProfile.email]);
-  const dobError = form.dob && !isValidDateInput(form.dob) ? "Date of birth must be in YYYY-MM-DD format." : "";
-  const canSaveProfile = !form.dob || isValidDateInput(form.dob);
+  const dobError = form.dob && !dobToIso(form.dob) ? "Enter a valid date in DD/MM/YYYY format." : "";
+  const canSaveProfile = !form.dob || Boolean(dobToIso(form.dob));
 
   const scrollableCardClass = "h-[320px] min-w-0 overflow-y-auto overflow-x-hidden scrollbar-hide";
 
@@ -79,6 +80,24 @@ export default function ProfilePage() {
       dob: profile.dob || "",
       gender: profile.gender || "",
     };
+  }
+
+  function formatDobForDisplay(value = "") {
+    const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (match) return `${match[3]}/${match[2]}/${match[1]}`;
+    const apiMatch = String(value).match(/^(\d{2})-(\d{2})-(\d{4})$/);
+    return apiMatch ? `${apiMatch[1]}/${apiMatch[2]}/${apiMatch[3]}` : String(value);
+  }
+
+  function dobToIso(value = "") {
+    const match = String(value).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    const isoMatch = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const iso = match
+      ? `${match[3]}-${match[2]}-${match[1]}`
+      : isoMatch
+        ? String(value)
+        : "";
+    return isValidDateInput(iso) ? iso : "";
   }
 
   async function loadDashboardProfile() {
@@ -99,8 +118,8 @@ export default function ProfilePage() {
   }
 
   async function handleProfileSave() {
-    if (form.dob && !isValidDateInput(form.dob)) {
-      setStatus({ type: "error", message: "Date of birth must be in YYYY-MM-DD format." });
+    if (form.dob && !dobToIso(form.dob)) {
+      setStatus({ type: "error", message: "Enter a valid date in DD/MM/YYYY format." });
       return;
     }
 
@@ -116,7 +135,7 @@ export default function ProfilePage() {
       district: form.district?.trim(),
       gender: form.gender,
       address: form.address?.trim(),
-      dataOfBirth: form.dob ? new Date(form.dob).toISOString() : undefined,
+      dataOfBirth: form.dob ? new Date(`${dobToIso(form.dob)}T00:00:00.000Z`).toISOString() : undefined,
     };
 
     try {
@@ -302,7 +321,7 @@ export default function ProfilePage() {
                   <List.Item className="!px-0 !py-3">
                     <div className="flex w-full flex-col gap-1">
                       <div className="text-sm font-bold text-ink">{item.mentorName}</div>
-                      <div className="flex w-full justify-between gap-2">
+                      <div className="flex w-full flex-wrap items-center justify-between gap-2">
                         <span className="text-xs italic text-muted">{item.timeSlot || item.time}</span>
                         <span className="text-xs italic text-muted">{item.mentorFee ? `Fee: Rs ${item.mentorFee}` : ""}</span>
                         <span className="text-xs italic text-muted">{item.date}</span>
@@ -364,17 +383,29 @@ export default function ProfilePage() {
                     key={key}
                     className="!mb-0"
                   >
-                    <Input
+                    {key === "dob" ? (
+                      <DatePicker
+                        value={dobToIso(form.dob) ? dayjs(dobToIso(form.dob), "YYYY-MM-DD") : null}
+                        format="DD/MM/YYYY"
+                        placeholder="DD/MM/YYYY"
+                        inputReadOnly
+                        className="!h-12 !w-full !rounded-2xl !border-[#e1d6cf] !bg-white !px-4 !text-[14px]"
+                        onChange={(date) => setForm((current) => ({
+                          ...current,
+                          dob: date ? date.format("DD/MM/YYYY") : "",
+                        }))}
+                        disabledDate={(date) => date && date.isAfter(dayjs(), "day")}
+                      />
+                    ) : <Input
                       value={form[key] || ""}
                       disabled={key === "email" || key === "mobile"}
                       placeholder={`Enter ${String(label).toLowerCase()}`}
                       className="!h-12 !rounded-2xl !border-[#e1d6cf] !bg-white !px-4 !text-[14px]"
-                      onChange={(event) =>
-                        setForm((current) => ({ ...current, [key]: event.target.value }))
-                      }
-                      type={key === "dob" ? "date" : "text"}
+                      onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))}
+                      type="text"
+                      inputMode={key === "dob" ? "numeric" : undefined}
                       autoComplete={key === "dob" ? "bday" : undefined}
-                    />
+                    />}
                     {key === "email" || key === "mobile" ? (
                       <div className="mt-2 text-[12px] text-[#8a7f78]">Can&apos;t edit</div>
                     ) : null}

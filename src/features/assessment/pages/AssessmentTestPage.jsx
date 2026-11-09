@@ -307,6 +307,7 @@ export default function AssessmentTestPage() {
 
   // Handle final submission
   async function handleSubmitTest() {
+    if (unansweredQuestions.length > 0) return;
     setIsSubmitModalVisible(false);
     setSubmitting(true);
 
@@ -761,6 +762,7 @@ const aptitudeTimerLabel = `${String(Math.floor(aptitudeTimeLeft / 60)).padStart
             <Button
               type="primary"
               size="small"
+              disabled={unansweredQuestions.length > 0}
               onClick={() => setIsSubmitModalVisible(true)}
               className="rounded-xl border-none bg-gradient-to-r from-emerald-600 to-teal-600 font-bold text-white shadow-md hover:from-emerald-500 hover:to-teal-500"
             >
@@ -803,7 +805,7 @@ const aptitudeTimerLabel = `${String(Math.floor(aptitudeTimeLeft / 60)).padStart
           <Button
             key="submit"
             type="primary"
-            // disabled={unansweredQuestions.length > 0}
+            disabled={unansweredQuestions.length > 0}
             onClick={handleSubmitTest}
             className="rounded-xl border-none bg-[#9a2119] font-bold hover:bg-[#801812]"
           >
