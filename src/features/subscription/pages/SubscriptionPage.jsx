@@ -168,7 +168,7 @@ export default function SubscriptionPage() {
       values: [false, true, true, true],
       notes: [null, null, "(Unlimited for 1 Year)", "(Unlimited for 1 Year)"],
     },
-    { feature: "Features - Infocentre", values: [false, false, true, true] },
+    { feature: "Infocentre", values: [false, false, true, true] },
     { feature: "Personalized Career Roadmap", values: [false, false, true, true] },
     { feature: "End-to-End Career Planning", values: [false, false, true, true] },
     { feature: "Annual Career Mentorship & Follow-up Support", values: [false, false, true, true] },
