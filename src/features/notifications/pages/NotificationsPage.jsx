@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { BellOutlined, CheckCircleOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Alert, Badge, Button, Spin } from "antd";
-import { getNotifications } from "../../../api/notificationApi";
 import { ModuleScreen, PageHero } from "../../../components/ui";
 import { useAppState } from "../../../state/AppStateContext";
 import { usePortalNavigation } from "../../portal/components/portalPageShared";
@@ -54,7 +53,7 @@ function NotificationCard({ item }) {
 
 export default function NotificationsPage() {
   const { navigate } = usePortalNavigation();
-  const { notifications: liveNotifications, unreadNotificationsCount } = useAppState();
+  const { notifications: liveNotifications, unreadNotificationsCount, refreshNotifications: refreshNotificationState } = useAppState();
   const [items, setItems] = useState(liveNotifications);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -63,12 +62,24 @@ export default function NotificationsPage() {
     setItems(liveNotifications);
   }, [liveNotifications]);
 
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    refreshNotificationState()
+      .then((data) => { if (active) setItems(data); })
+      .catch((error) => {
+        if (active) setLoadError(error?.response?.data?.message || error?.message || "Failed to load notifications.");
+      })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [refreshNotificationState]);
+
   async function refreshNotifications() {
     setLoading(true);
     setLoadError("");
 
     try {
-      const data = await getNotifications();
+      const data = await refreshNotificationState();
       setItems(data);
     } catch (error) {
       setLoadError(error?.response?.data?.message || error?.message || "Failed to load notifications.");

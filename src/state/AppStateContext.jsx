@@ -1,5 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { notifications as notificationItems } from "../data/careermapData";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { getDashboard } from "../api/dashboardApi";
 import { useAuthStore } from "../store/authStore";
 import { getNotifications } from "../api/notificationApi";
@@ -297,29 +296,17 @@ export function AppStateProvider({ children }) {
   const [state, setState] = useState(readInitialState);
   const accessToken = useAuthStore((current) => current.accessToken);
 
-  useEffect(() => {
-    let active = true;
-
-    async function loadNotifications() {
-      if (!accessToken) {
-        return;
-      }
-
-      try {
-        const items = await getNotifications();
-        if (active && items.length) {
-          setState((current) => ({ ...current, notifications: items }));
-        }
-      } catch {
-        // Keep the local fallback notifications when the API is unavailable.
-      }
-    }
-
-    loadNotifications();
-    return () => {
-      active = false;
-    };
+  const refreshNotifications = useCallback(async () => {
+    if (!accessToken) return [];
+    const items = await getNotifications();
+    if (useAuthStore.getState().accessToken !== accessToken) return [];
+    setState((current) => ({ ...current, notifications: items }));
+    return items;
   }, [accessToken]);
+
+  useEffect(() => {
+    if (accessToken) refreshNotifications().catch(() => {});
+  }, [accessToken, refreshNotifications]);
 
   useEffect(() => {
     if (!accessToken) {
@@ -479,7 +466,8 @@ export function AppStateProvider({ children }) {
       ...state,
       activePlanIds,
       hasActiveSubscription: activePlanIds.length > 0,
-      unreadNotificationsCount: notificationItems.filter((item) => item.unread).length,
+      unreadNotificationsCount: (state.notifications || []).filter((item) => item.unread).length,
+      refreshNotifications,
       isUnlocked(feature) {
         return unlockedFeatures.has(feature);
       },
@@ -701,7 +689,7 @@ export function AppStateProvider({ children }) {
       dashboardData: state.dashboardData,
       profileIncomplete: state.profileIncomplete,
     };
-  }, [state]);
+  }, [state, refreshNotifications]);
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 }
