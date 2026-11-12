@@ -259,6 +259,7 @@ export default function BookMentorPage() {
   const [selectedMentor, setSelectedMentor] = useState(null);
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedSlot, setSelectedSlot] = useState("");
+  const [paymentNotice, setPaymentNotice] = useState("");
   const [bookedSlots, setBookedSlots] = useState([]);
   const [bookedSlotsLoading, setBookedSlotsLoading] = useState(false);
   const [bookedSlotsError, setBookedSlotsError] = useState("");
@@ -529,12 +530,13 @@ export default function BookMentorPage() {
 
   // ── Payment ──────────────────────────────────────────────────────────────
   const handlePayment = async () => {
+    setPaymentNotice("");
     try {
       console.log("PAYMENT CLICKED");
       const loaded = await loadRazorpayScript();
       console.log("SDK LOADED =", loaded);
       if (!loaded) {
-        alert("SDK FAILED");
+        setPaymentNotice("Payment checkout could not be loaded. Please try again.");
         return;
       }
       const orderResponse = await createMentorOrder({
@@ -568,7 +570,23 @@ export default function BookMentorPage() {
       rzp.open();
     } catch (err) {
       console.log("FULL ERROR", err);
-      alert(err?.response?.data?.message || err.message);
+      const message = err?.response?.status === 409
+        ? "This time slot is already booked. Please choose another time slot."
+        : err?.response?.data?.message || err?.message || "Booking payment failed. Please try again.";
+      setPaymentNotice(message);
+      if (err?.response?.status === 409 && activeMentor?.id && selectedDate) {
+        setSelectedSlot("");
+        setBookedSlotsLoading(true);
+        try {
+          const latestBookedSlots = await getBookedMentorSlots(activeMentor.id, selectedDate);
+          setBookedSlots(latestBookedSlots);
+          setBookedSlotsError("");
+        } catch (refreshError) {
+          setBookedSlotsError(refreshError?.response?.data?.message || refreshError?.message || "Failed to refresh booked slots.");
+        } finally {
+          setBookedSlotsLoading(false);
+        }
+      }
     }
   };
 
@@ -800,6 +818,7 @@ export default function BookMentorPage() {
                 onClick={() => {
                   setSelectedDate(date.key);
                   setSelectedSlot("");
+                  setPaymentNotice("");
                 }}
                 className="w-[88px] rounded-[16px] px-2 py-3 text-center transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-35"
                 style={{
@@ -826,8 +845,11 @@ export default function BookMentorPage() {
                   <button
                     key={slot}
                     type="button"
-                    disabled={isBooked}
-                    onClick={() => setSelectedSlot(slot)}
+                    disabled={isBooked || bookedSlotsLoading || Boolean(bookedSlotsError)}
+                    onClick={() => {
+                      setSelectedSlot(slot);
+                      setPaymentNotice("");
+                    }}
                     className="rounded-[12px] px-3.5 py-2.5 text-[12px] font-extrabold transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-40"
                     style={{
                       backgroundColor: isBooked
@@ -868,13 +890,18 @@ export default function BookMentorPage() {
 
       <button
         type="button"
-        disabled={!selectedDate || !selectedSlot}
+        disabled={!selectedDate || !selectedSlot || bookedSlotsLoading || Boolean(bookedSlotsError)}
         onClick={handlePayment}
         className="mt-5 w-full rounded-[18px] py-3.5 text-[14px] font-extrabold text-white shadow-md disabled:cursor-not-allowed disabled:opacity-40"
         style={{ background: "linear-gradient(90deg, #c72733 0%, #51154c 100%)" }}
       >
         Book & Pay
       </button>
+      {paymentNotice ? (
+        <div role="alert" className="mt-3 rounded-[14px] border border-[#f2c7c2] bg-[#fff4f2] px-4 py-3 text-sm font-semibold text-[#9a2119]">
+          {paymentNotice}
+        </div>
+      ) : null}
     </div>
   </Modal>
 </div>
