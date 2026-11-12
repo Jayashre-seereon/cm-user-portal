@@ -8,6 +8,7 @@ import {
   FundProjectionScreenOutlined,
   GlobalOutlined,
   HomeOutlined,
+  MenuOutlined,
   LogoutOutlined,
   NotificationOutlined,
   QuestionCircleOutlined,
@@ -18,7 +19,7 @@ import {
   TrophyOutlined,
   UserOutlined,
 } from "@ant-design/icons";
-import { Avatar, Badge, Button, Divider, Dropdown, Popover, Space, Typography } from "antd";
+import { Avatar, Badge, Button, Divider, Drawer, Dropdown, Popover, Space, Typography } from "antd";
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { logoutUser } from "../../api/authApi";
@@ -48,6 +49,7 @@ export default function WebsiteNavbar() {
   const location = useLocation();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [lockedModule, setLockedModule] = useState(null);
   const { unreadNotificationsCount, userProfile, logout, notifications, dashboardData } = useAppState();
   const previewNotifications = (notifications || []).slice(0, 3);
@@ -64,6 +66,24 @@ export default function WebsiteNavbar() {
     { key: "settings", icon: <SettingOutlined />, label: "Settings" },
     { key: "logout", icon: <LogoutOutlined />, label: "Logout", danger: true },
   ];
+
+  async function handleMobileMenuClick(key) {
+    setMobileMenuOpen(false);
+    if (key === "home") navigate("/app/dashboard");
+    else if (key.startsWith("/app/")) await handleModuleNavClick(key);
+    else if (key === "profile") navigate("/app/profile");
+    else if (key === "settings") navigate("/app/settings");
+    else if (key === "logout") {
+      try {
+        await logoutUser();
+      } catch {
+        // Fall back to local logout even if the backend logout fails.
+      } finally {
+        logout();
+        navigate("/auth-entry");
+      }
+    }
+  }
 
   async function handleModuleNavClick(routePath) {
     const curated = buildDashboardModules(dashboardData?.modules || []);
@@ -160,13 +180,23 @@ export default function WebsiteNavbar() {
   return (
     <header className="sticky top-0 z-30 border-b border-[#eaded9] bg-white/95 backdrop-blur">
       <div className="mx-auto max-w-[1280px] px-3 md:px-6">
-        <div className="flex min-h-14 items-center justify-between gap-1.5 py-2 sm:gap-3">
+          <div className="flex min-h-14 items-center justify-between gap-1.5 py-2 sm:gap-3">
           <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-3 md:gap-5">
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(true)}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#eaded9] bg-white text-[#33252d] sm:hidden"
+                aria-label="Open navigation menu"
+                title="Menu"
+              >
+                <MenuOutlined />
+              </button>
+
             <Link to="/app/dashboard" className="shrink-0">
               <span className="[&_img]:!h-9 [&_img]:!max-w-[104px] sm:[&_img]:!h-10 sm:[&_img]:!max-w-[120px] md:[&_img]:!h-14 md:[&_img]:!max-w-[190px]"><BrandMark /></span>
             </Link>
 
-            <nav className="min-w-0 flex-1">
+            <nav className="hidden min-w-0 flex-1 sm:block">
               <div className="flex items-center gap-1 whitespace-nowrap">
                 <Link
                   to="/app/dashboard"
@@ -190,7 +220,7 @@ export default function WebsiteNavbar() {
                     }`}
                   >
                     <AppstoreOutlined className="text-[11px] sm:text-[13px]" />
-                    <span>Modules</span>
+                    <span className="hidden sm:inline">Modules</span>
                     <DownOutlined className="text-[11px] opacity-60" />
                   </button>
                 </Dropdown>
@@ -203,7 +233,7 @@ export default function WebsiteNavbar() {
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+          <div className="flex shrink-0 items-center gap-2.5 sm:gap-2">
             {/* Mobile Search Toggle */}
             <button
               type="button"
@@ -253,7 +283,7 @@ export default function WebsiteNavbar() {
               trigger={["click"]}
               placement="bottomRight"
             >
-              <button type="button" className="flex items-center gap-1 px-0.5 py-1 sm:gap-2 sm:px-1">
+              <button type="button" className="hidden items-center gap-1 px-0.5 py-1 sm:flex sm:gap-2 sm:px-1">
                 <Avatar
                   size={26}
                   icon={<UserOutlined />}
@@ -265,6 +295,7 @@ export default function WebsiteNavbar() {
                 <DownOutlined className="text-[11px] text-[#9b8f97]" />
               </button>
             </Dropdown>
+
           </div>
         </div>
 
@@ -275,6 +306,34 @@ export default function WebsiteNavbar() {
           </div>
         )}
       </div>
+
+      <Drawer
+        title={<span className="text-[#33252d]">Navigation</span>}
+        placement="left"
+        width={280}
+        open={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+        className="sm:!hidden"
+        styles={{ body: { padding: "8px 12px" }, header: { padding: "12px 16px" } }}
+      >
+        <div className="flex h-full flex-col overflow-y-auto pb-2">
+          <button onClick={() => handleMobileMenuClick("home")} className={`flex min-h-8 items-center gap-2 rounded px-2 text-left text-[13px] ${location.pathname === "/app/dashboard" ? "bg-[#fff2ee] text-[#9a2119]" : "text-[#33252d]"}`}>
+            <HomeOutlined /> Home
+          </button>
+          <div className="px-2 pb-1 pt-2 text-[12px] text-[#8b8086]">Modules</div>
+          {moduleItems.map((item) => (
+            <button key={item.key} onClick={() => handleMobileMenuClick(item.key)} className={`flex min-h-8 items-center gap-2 rounded px-2 text-left text-[12px] ${location.pathname === item.key ? "bg-[#fff2ee] text-[#9a2119]" : "text-[#33252d]"}`}>
+              <span className="w-3 shrink-0">{item.icon}</span><span>{item.label}</span>
+            </button>
+          ))}
+          <Divider className="!my-2" />
+          {profileMenuItems.map((item) => (
+            <button key={item.key} onClick={() => handleMobileMenuClick(item.key)} className={`flex min-h-8 items-center gap-2 rounded px-2 text-left text-[12px] ${item.key === "logout" ? "text-[#d43832]" : "text-[#33252d]"}`}>
+              <span className="w-3 shrink-0">{item.icon}</span><span>{item.label}</span>
+            </button>
+          ))}
+        </div>
+      </Drawer>
 
       <UnlockRedirectModal
         open={!!lockedModule}
