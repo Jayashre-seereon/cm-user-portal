@@ -557,23 +557,23 @@ const filtered = useMemo(
     <ModuleScreen className="space-y-4">
       {error ? <Alert type="warning" title={error} showIcon style={{ borderRadius: 16 }} /> : null}
 
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-2 sm:gap-4">
         <div>
-          <h1 className="m-0 text-2xl font-black text-[#1a0a09]">Scholarships</h1>
+          <h1 className="m-0 text-xl font-black text-[#1a0a09] sm:text-2xl">Scholarships</h1>
           <p className="mt-1 text-xs text-[#b8837e]">{filtered.length} opportunities found</p>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-3">
+        <div className="flex flex-wrap items-center justify-end gap-1.5 pr-2 sm:gap-3 sm:pr-0">
           <Tabs
             activeKey={activeStatus}
             onChange={setActiveStatus}
             items={["All", "Active", "Expired"].map((key) => ({ key, label: key }))}
-            className="mb-0 [&_.ant-tabs-nav]:!mb-0 [&_.ant-tabs-tab]:font-semibold [&_.ant-tabs-tab]:text-xs [&_.ant-tabs-tab]:uppercase [&_.ant-tabs-tab]:tracking-widest [&_.ant-tabs-tab-active_.ant-tabs-tab-btn]:!text-[#9a2119] [&_.ant-tabs-ink-bar]:!bg-[#9a2119] [&_.ant-tabs-nav::before]:!border-[#f0e4e2]"
+            className="mb-0 [&_.ant-tabs-nav]:!mb-0 [&_.ant-tabs-tab]:!px-1.5 [&_.ant-tabs-tab]:font-semibold [&_.ant-tabs-tab]:text-[10px] [&_.ant-tabs-tab]:uppercase [&_.ant-tabs-tab]:tracking-wider sm:[&_.ant-tabs-tab]:!px-3 sm:[&_.ant-tabs-tab]:text-xs sm:[&_.ant-tabs-tab]:tracking-widest [&_.ant-tabs-tab:last-child]:!mr-2 sm:[&_.ant-tabs-tab:last-child]:!mr-0 [&_.ant-tabs-tab-active_.ant-tabs-tab-btn]:!text-[#9a2119] [&_.ant-tabs-ink-bar]:!bg-[#9a2119] [&_.ant-tabs-nav::before]:!border-[#f0e4e2]"
           />
-          <PageHero backOnly onBack={goToDashboard} className="shrink-0" />
+          <PageHero backOnly onBack={goToDashboard} className="shrink-0 pl-1 sm:pl-0" />
         </div>
       </div>
 
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap">
 
   {/* Category */}
   <div className="relative">
@@ -588,7 +588,7 @@ const filtered = useMemo(
         value: String(item.id),
         label: item.title || item.name,
       }))}
-      style={{ minWidth: 180 }}
+      style={{ minWidth: 0, width: "100%" }}
       className="pill-select"
     />
   </div>
@@ -606,7 +606,7 @@ const filtered = useMemo(
         value: option,
         label: option,
       }))}
-      style={{ minWidth: 180 }}
+      style={{ minWidth: 0, width: "100%" }}
       className="pill-select"
     />
   </div>
@@ -624,7 +624,7 @@ const filtered = useMemo(
         value: option,
         label: option,
       }))}
-      style={{ minWidth: 160 }}
+      style={{ minWidth: 0, width: "100%" }}
       className="pill-select"
     />
   </div>
@@ -663,15 +663,15 @@ const filtered = useMemo(
 
                 openScholarship(item, itemIndex);
               }}
-              className="group flex cursor-pointer overflow-hidden rounded-[24px] border border-[#f0e4e2] bg-white transition-all duration-200 hover:-translate-y-1 hover:border-[#9a2119] hover:shadow-lg hover:shadow-[#9a2119]/10"
+              className="group flex cursor-pointer overflow-hidden rounded-[20px] border border-[#f0e4e2] bg-white transition-all duration-200 hover:-translate-y-1 hover:border-[#9a2119] hover:shadow-lg hover:shadow-[#9a2119]/10 sm:rounded-[24px]"
             >
               {/* Amount rail: leads with the number, not an icon */}
              
-              <div className="flex min-w-0 flex-1 flex-col gap-3 border-l border-[#f0e4e2] px-4 py-4">
+              <div className="flex min-w-0 flex-1 flex-col gap-2.5 border-l border-[#f0e4e2] px-3 py-3 sm:gap-3 sm:px-4 sm:py-4">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="m-0 text-[10px] font-bold uppercase tracking-widest text-[#b8837e]">{item.provider}</p>
-                    <p className="m-0 mt-0.5 line-clamp-2 text-[15px] font-black leading-snug text-[#1a0a09] transition-colors group-hover:text-[#9a2119]">
+                    <p className="m-0 mt-0.5 line-clamp-2 text-[13px] font-black leading-snug text-[#1a0a09] transition-colors group-hover:text-[#9a2119] sm:text-[15px]">
                       {item.name}
                     </p>
                   </div>
