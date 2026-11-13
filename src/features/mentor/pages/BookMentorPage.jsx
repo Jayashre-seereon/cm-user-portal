@@ -276,7 +276,8 @@ export default function BookMentorPage() {
       setSelectedMentorId(snapshot.selectedMentorId || "");
       setSelectedMentor(snapshot.selectedMentor || null);
       setShowBookingPanel(false);
-    }
+    },
+    !pageLocation.state?.fromGlobalSearch
   );
 
   // ── Filter state ─────────────────────────────────────────────────────────
@@ -428,7 +429,6 @@ export default function BookMentorPage() {
           if (active && mentor) {
             setSelectedMentor(mentor);
             setSelectedMentorId(String(mentor.id));
-            setShowBookingPanel(true);
             return;
           }
         } catch {
@@ -443,7 +443,6 @@ export default function BookMentorPage() {
       if (active && mentor) {
         setSelectedMentor(mentor);
         setSelectedMentorId(String(mentor.id || mentor.name));
-        setShowBookingPanel(true);
       }
     }
     resolveMentor();
@@ -676,7 +675,11 @@ export default function BookMentorPage() {
               Profile, schedule selection, and booking flow.
             </p>
           </div>
-          <PageHero backOnly onBack={() => window.history.back()} className="shrink-0" />
+          <PageHero
+            backOnly
+            onBack={() => navigate(pageLocation.state?.fromGlobalSearch ? (pageLocation.state.returnTo || "/app/dashboard") : -1)}
+            className="shrink-0"
+          />
         </div>
 
         {!isModuleUnlocked && !unlocked ? (

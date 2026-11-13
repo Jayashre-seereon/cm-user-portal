@@ -498,7 +498,7 @@ export default function InstitutePage() {
 
           <PageHero
             backOnly
-            onBack={goToDashboard}
+            onBack={() => navigate(location.state?.fromGlobalSearch ? (location.state.returnTo || "/app/dashboard") : "/app/dashboard")}
             className="shrink-0"
           />
         </div>

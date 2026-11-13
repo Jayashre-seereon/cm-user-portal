@@ -62,7 +62,7 @@ export default function EntranceExamPage() {
   const [mode, setMode] = useState("");
   useBrowserStepHistory("entranceExamView", { selectedExam }, ({ selectedExam: previousExam }) => {
     setSelectedExam(previousExam || null);
-  });
+  }, !location.state?.fromGlobalSearch);
 // LOAD ENTRANCE EXAMS
 
 useEffect(() => {
@@ -322,7 +322,7 @@ if (selectedExam) {
   return (
     <ModuleScreen className="space-y-4">
       <div className="flex justify-end">
-        <PageHero backOnly onBack={() => window.history.back()} />
+        <PageHero backOnly onBack={() => navigate(location.state?.fromGlobalSearch ? (location.state.returnTo || "/app/dashboard") : -1)} />
       </div>
 
       <div className="content-stagger grid grid-cols-1 gap-5 lg:grid-cols-[1fr_320px] lg:items-start">

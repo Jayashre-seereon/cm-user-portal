@@ -14,7 +14,7 @@ import {
   TrophyOutlined,
 } from "@ant-design/icons";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { globalSearch } from "../../api/searchApi";
 import { resolveNavigationTarget } from "../../utils/searchNavigation";
 import { useAppState } from "../../state/AppStateContext";
@@ -169,6 +169,7 @@ function ItemThumbnail({ item, config }) {
 
 export default function GlobalSearchBar({ className = "" }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { dashboardData } = useAppState();
   const containerRef = useRef(null);
   const inputRef = useRef(null);
@@ -368,9 +369,21 @@ export default function GlobalSearchBar({ className = "" }) {
     const isInstituteResult =
       ["institution", "institute", "institutes", "college", "colleges"].includes(itemType) ||
       ["institutions", "colleges"].includes(String(item.group || "").toLowerCase());
+    const isExamResult =
+      ["entranceexam", "entranceexams", "exam", "exams"].includes(itemType) ||
+      ["entranceexams", "exams"].includes(String(item.group || "").toLowerCase());
+    const isScholarshipResult =
+      ["scholarship", "scholarships"].includes(itemType) ||
+      String(item.group || "").toLowerCase() === "scholarships";
+    const returnTo = `${location.pathname}${location.search}`;
+    const searchNavigationState = {
+      fromGlobalSearch: true,
+      returnTo,
+      ...(isInstituteResult || isExamResult || isScholarshipResult ? { searchItem: item } : {}),
+    };
     const openModuleLanding =
       itemType === "module" ||
-      (!isInstituteResult && ["/app/institutes", "/app/scholarships", "/app/entrance-exam", "/app/learn"].includes(resolvedPath));
+      (!(isInstituteResult || isExamResult || isScholarshipResult) && ["/app/institutes", "/app/scholarships", "/app/entrance-exam", "/app/learn"].includes(resolvedPath));
     // Search entities in these modules should open the module's full listing,
     // not auto-select one result via query params or searchItem state.
     const targetUrl = openModuleLanding ? resolvedPath : resolvedUrl;
@@ -395,18 +408,18 @@ export default function GlobalSearchBar({ className = "" }) {
             state: {
               moduleId: targetModule.id,
               accessStatus: response.mode || "full",
-              ...(isInstituteResult ? { searchItem: item } : {}),
+              ...searchNavigationState,
             },
           });
         } catch (error) {
           console.error("Could not validate module access:", error);
           navigate(targetUrl, {
-            state: { moduleId: targetModule.id, ...(isInstituteResult ? { searchItem: item } : {}) },
+            state: { moduleId: targetModule.id, ...searchNavigationState },
           });
         }
         return;
       }
-      navigate(targetUrl, isInstituteResult ? { state: { searchItem: item } } : undefined);
+      navigate(targetUrl, { state: searchNavigationState });
     }
   }
 
