@@ -375,15 +375,29 @@ export default function GlobalSearchBar({ className = "" }) {
     const isScholarshipResult =
       ["scholarship", "scholarships"].includes(itemType) ||
       String(item.group || "").toLowerCase() === "scholarships";
+    const itemGroup = String(item.group || "").toLowerCase();
+    const isVideoResult =
+      ["masterclass", "masterclasses", "learn", "video", "videos"].includes(itemType) ||
+      ["masterclasses", "learn", "videos"].includes(itemGroup);
+    const isQuizResult = ["quiz", "quizzes"].includes(itemType) || itemGroup === "quizzes";
+    const isNewsletterResult = ["newsletter", "newsletters"].includes(itemType) || itemGroup === "newsletters";
+    const isStudyAbroadResult =
+      ["studyabroad", "study_abroad", "abroad"].includes(itemType) ||
+      ["studyabroad", "study_abroad", "abroad"].includes(itemGroup);
+    const isMentorResult = ["mentor", "mentors"].includes(itemType) || itemGroup === "mentors";
+    const isCareerResult =
+      ["careers", "career"].includes(itemGroup) ||
+      ["career", "stream", "category", "secondcategory", "subcategory", "careerpath"].includes(itemType);
+    const isDirectResult = isCareerResult || isInstituteResult || isExamResult || isScholarshipResult || isMentorResult || isVideoResult || isQuizResult || isNewsletterResult || isStudyAbroadResult;
     const returnTo = `${location.pathname}${location.search}`;
     const searchNavigationState = {
-      fromGlobalSearch: true,
+      fromGlobalSearch: isDirectResult,
       returnTo,
-      ...(isInstituteResult || isExamResult || isScholarshipResult ? { searchItem: item } : {}),
+      ...(isDirectResult ? { searchItem: item } : {}),
     };
     const openModuleLanding =
       itemType === "module" ||
-      (!(isInstituteResult || isExamResult || isScholarshipResult) && ["/app/institutes", "/app/scholarships", "/app/entrance-exam", "/app/learn"].includes(resolvedPath));
+      (!isDirectResult && ["/app/institutes", "/app/scholarships", "/app/entrance-exam", "/app/learn", "/app/quiz", "/app/newsletter", "/app/abroad"].includes(resolvedPath));
     // Search entities in these modules should open the module's full listing,
     // not auto-select one result via query params or searchItem state.
     const targetUrl = openModuleLanding ? resolvedPath : resolvedUrl;

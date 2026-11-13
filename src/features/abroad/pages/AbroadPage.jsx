@@ -336,11 +336,20 @@ useBrowserStepHistory(
     setSelectedCountry(snapshot.selectedCountry || null);
     setFormOpen(Boolean(snapshot.formOpen));
     setSubmitted(Boolean(snapshot.submitted));
-  }
+  },
+  !location.state?.fromGlobalSearch
 );
 
 function closeConsultForm() {
   setSubmitError("");
+  window.history.back();
+}
+
+function handleCountryBack() {
+  if (location.state?.fromGlobalSearch) {
+    navigate(location.state.returnTo || "/app/dashboard");
+    return;
+  }
   window.history.back();
 }
 
@@ -419,7 +428,7 @@ function closeConsultForm() {
     return (
       <ModuleScreen className="space-y-6">
         <div className="flex justify-end">
-          <PageHero backOnly onBack={() => window.history.back()} />
+          <PageHero backOnly onBack={handleCountryBack} />
         </div>
         <div className="motion-item rounded-[28px] border border-[#f0e4e2] bg-white p-8 text-center shadow-sm">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#fdf0ee] text-xl text-[#9a2119]">
@@ -450,7 +459,7 @@ if (selectedCountry) {
     <ModuleScreen className="space-y-6  pb-28">
       {/* Back */}
       <div className="flex justify-end">
-        <PageHero backOnly onBack={() => window.history.back()} />
+        <PageHero backOnly onBack={handleCountryBack} />
       </div>
 
       {/* Hero */}

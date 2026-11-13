@@ -179,7 +179,7 @@ const unlocked =
     setCompleted(false);
     setResult(null);
     setSubmitting(false);
-  });
+  }, !location.state?.fromGlobalSearch);
 
   useEffect(() => {
     let active = true;
@@ -213,6 +213,20 @@ const unlocked =
     };
   }, []);
 
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const quizId = params.get("quizId") || location.state?.searchItem?.id;
+    const quizTitle = params.get("quiz") || location.state?.searchItem?.title || location.state?.searchItem?.name;
+    if (!quizId && !quizTitle) return;
+
+    const normalizedTitle = normalizeQuizTitle(quizTitle);
+    const selectedQuiz = quizzes.find((quiz) =>
+      (quizId && String(quiz.id) === String(quizId)) ||
+      (normalizedTitle && normalizeQuizTitle(quiz.title) === normalizedTitle)
+    );
+    if (selectedQuiz) setActiveQuizId(selectedQuiz.id);
+  }, [quizzes, location.search, location.state]);
+
   const activeQuiz = useMemo(() => quizzes.find((quiz) => String(quiz.id) === String(activeQuizId)) || null, [activeQuizId, quizzes]);
   const quizMeta = useMemo(() => (activeQuiz ? getQuizMeta(activeQuiz) : null), [activeQuiz]);
   const questions = quizMeta?.questions || [];
@@ -235,6 +249,10 @@ const unlocked =
   }, [activeQuiz]);
 
   const resetQuiz = () => {
+    if (location.state?.fromGlobalSearch) {
+      navigate(location.state.returnTo || "/app/dashboard");
+      return;
+    }
     if (activeQuizId) {
       window.history.back();
       return;
