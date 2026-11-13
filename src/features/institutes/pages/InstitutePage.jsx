@@ -27,6 +27,14 @@ function getInitials(name = "") {
     .join("");
 }
 
+function normalizeInstituteSearch(value = "") {
+  return String(value)
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
 function getAccentByType(type = "") {
   const t = String(type).trim().toLowerCase();
 
@@ -80,7 +88,12 @@ export default function InstitutePage() {
     const selected = location.state?.searchItem;
     const selectedGroup = String(selected?.group || "").toLowerCase();
     const selectedType = String(selected?.type || "").toLowerCase();
-    if (selected && (selectedGroup === "institutions" || selectedGroup === "colleges" || selectedType === "institution" || params.has("instituteId"))) {
+    if (selected && (
+      selectedGroup === "institutions" ||
+      selectedGroup === "colleges" ||
+      ["institution", "institute", "institutes", "college", "colleges"].includes(selectedType) ||
+      params.has("instituteId")
+    )) {
       setSearchResult({
         id: String(selected.id ?? selected.navigation?.id ?? params.get("instituteId") ?? selected.title),
         name: selected.title || selected.name || "Unnamed Institute",
@@ -120,10 +133,10 @@ export default function InstitutePage() {
         const results = Array.isArray(response?.results)
           ? response.results
           : Object.values(response?.grouped || {}).flat();
-        const normalizedSearch = search.trim().toLocaleLowerCase();
+        const normalizedSearch = normalizeInstituteSearch(search);
         const selected = results.find((result) => {
           const resultId = result?.id ?? result?.navigation?.id;
-          const resultTitle = String(result?.title || result?.name || "").trim().toLocaleLowerCase();
+          const resultTitle = normalizeInstituteSearch(result?.title || result?.name || "");
           return (requestedInstituteId && String(resultId ?? "") === String(requestedInstituteId)) ||
             resultTitle === normalizedSearch ||
             resultTitle.includes(normalizedSearch);
@@ -286,27 +299,29 @@ export default function InstitutePage() {
       // A clicked global-search result is the user's exact selection. Keep it
       // visible directly; filtering that synthetic card again can discard it
       // when the backend's title/query formatting differs slightly.
-      (searchResult ? [searchResult] : items)
+      (searchResult ? [
+        ...items.filter((item) => String(item.id) !== String(searchResult.id)),
+        searchResult,
+      ] : items)
         .filter((item) => {
           if (searchResult && String(item.id) === String(searchResult.id)) return true;
           const instituteType =
             item.type || item.institute_type || "";
 
+          const normalizedSearch = normalizeInstituteSearch(search);
           const matchesSearch =
-            !search ||
-            item.name
-              ?.toLowerCase()
-              .includes(search.toLowerCase()) ||
-            item.location
-              ?.toLowerCase()
-              .includes(search.toLowerCase()) ||
-            instituteType
-              .toLowerCase()
-              .includes(search.toLowerCase());
+            !normalizedSearch ||
+            normalizeInstituteSearch(item.name).includes(normalizedSearch) ||
+            normalizeInstituteSearch(item.location).includes(normalizedSearch) ||
+            normalizeInstituteSearch(instituteType).includes(normalizedSearch);
 
           return matchesSearch;
         })
         .sort((a, b) => {
+          if (searchResult) {
+            if (String(a.id) === String(searchResult.id)) return -1;
+            if (String(b.id) === String(searchResult.id)) return 1;
+          }
           if (a.createdAt && b.createdAt) {
             return (
               new Date(b.createdAt) -

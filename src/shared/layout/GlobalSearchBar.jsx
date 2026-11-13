@@ -37,6 +37,14 @@ const CATEGORY_TABS = [
   { key: "newsletters", label: "Career Insights", groupKey: "newsletters", types: ["newsletter"] },
 ];
 
+function normalizeSearchText(value = "") {
+  return String(value)
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
 function getTypeConfig(item = {}) {
   const type = String(item.type || "").toLowerCase();
   const group = String(item.group || "").toLowerCase();
@@ -207,9 +215,30 @@ export default function GlobalSearchBar({ className = "" }) {
 
         if (response && response.success !== false) {
           const entityResults = Array.isArray(response.results) ? response.results : [];
-          const normalizedQuery = trimmed.toLowerCase().replace(/\s+/g, " ");
+          const normalizedQuery = normalizeSearchText(trimmed);
+          const groupedInstitutes = Array.isArray(response.grouped?.institutions)
+            ? response.grouped.institutions
+            : Array.isArray(response.grouped?.colleges)
+            ? response.grouped.colleges
+            : [];
+          const instituteResults = [...groupedInstitutes, ...entityResults.filter((item) =>
+            ["institution", "institute", "institutes", "college", "colleges"].includes(String(item.type || "").toLowerCase()) ||
+            ["institutions", "colleges"].includes(String(item.group || "").toLowerCase())
+          )];
+          const localInstituteMatches = instituteResults.filter((item) => {
+            const name = normalizeSearchText(item.title || item.name || "");
+            return normalizedQuery && name.includes(normalizedQuery);
+          });
+          const normalizedInstituteResults = [...new Map(
+            [...localInstituteMatches, ...instituteResults].map((item) => [
+              String(item.id ?? item.navigation?.id ?? item.title),
+              item,
+            ])
+          ).values()];
+          const nonInstituteResults = entityResults.filter((item) => !instituteResults.includes(item));
+          const mergedEntityResults = [...nonInstituteResults, ...normalizedInstituteResults];
           const moduleResults = moduleCards
-            .filter((module) => module.title.toLowerCase().includes(normalizedQuery))
+            .filter((module) => normalizeSearchText(module.title).includes(normalizedQuery))
             .map((module) => ({
               id: `module:${module.route}`,
               title: module.title,
@@ -219,10 +248,11 @@ export default function GlobalSearchBar({ className = "" }) {
               badge: "Module",
               navigation: { path: module.route },
             }));
-          const results = [...moduleResults, ...entityResults];
-          const grouped = response.grouped || {};
+          const results = [...moduleResults, ...mergedEntityResults];
+          const grouped = { ...(response.grouped || {}) };
+          if (normalizedInstituteResults.length) grouped.institutions = normalizedInstituteResults;
           grouped.modules = moduleResults;
-          const total = (typeof response.total === "number" ? response.total : entityResults.length) + moduleResults.length;
+          const total = (typeof response.total === "number" ? response.total : mergedEntityResults.length) + moduleResults.length;
 
           setSearchData({
             total,
@@ -334,9 +364,13 @@ export default function GlobalSearchBar({ className = "" }) {
     if (!item) return;
     const resolvedUrl = resolveNavigationTarget(item);
     const resolvedPath = resolvedUrl.split("?")[0].replace(/\/$/, "");
+    const itemType = String(item.type || "").toLowerCase();
+    const isInstituteResult =
+      ["institution", "institute", "institutes", "college", "colleges"].includes(itemType) ||
+      ["institutions", "colleges"].includes(String(item.group || "").toLowerCase());
     const openModuleLanding =
-      String(item.type || "").toLowerCase() === "module" ||
-      ["/app/institutes", "/app/scholarships", "/app/entrance-exam", "/app/learn"].includes(resolvedPath);
+      itemType === "module" ||
+      (!isInstituteResult && ["/app/institutes", "/app/scholarships", "/app/entrance-exam", "/app/learn"].includes(resolvedPath));
     // Search entities in these modules should open the module's full listing,
     // not auto-select one result via query params or searchItem state.
     const targetUrl = openModuleLanding ? resolvedPath : resolvedUrl;
@@ -358,17 +392,21 @@ export default function GlobalSearchBar({ className = "" }) {
             return;
           }
           navigate(targetUrl, {
-            state: { moduleId: targetModule.id, accessStatus: response.mode || "full" },
+            state: {
+              moduleId: targetModule.id,
+              accessStatus: response.mode || "full",
+              ...(isInstituteResult ? { searchItem: item } : {}),
+            },
           });
         } catch (error) {
           console.error("Could not validate module access:", error);
           navigate(targetUrl, {
-            state: { moduleId: targetModule.id },
+            state: { moduleId: targetModule.id, ...(isInstituteResult ? { searchItem: item } : {}) },
           });
         }
         return;
       }
-      navigate(targetUrl);
+      navigate(targetUrl, isInstituteResult ? { state: { searchItem: item } } : undefined);
     }
   }
 
