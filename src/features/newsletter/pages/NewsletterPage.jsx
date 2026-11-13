@@ -152,14 +152,26 @@ export default function NewsletterPage() {
     };
   }, []);
 const filteredItems = useMemo(() => {
-  if (selectedType === "ALL") {
-    return items;
-  }
-
-  return items.filter(
-    (item) => item.type?.toUpperCase() === selectedType
+  const params = new URLSearchParams(pageLocation.search);
+  const selectedId = params.get("newsletterId");
+  const selectedTitle = String(params.get("title") || pageLocation.state?.searchItem?.title || "").trim().toLocaleLowerCase();
+  const matchingItems = items.filter((item) =>
+    (selectedId && String(item.id) === String(selectedId)) ||
+    (selectedTitle && String(item.title || "").trim().toLocaleLowerCase() === selectedTitle)
   );
-}, [items, selectedType]);
+  const candidates = matchingItems.length ? matchingItems : items;
+  const filtered = selectedType === "ALL"
+    ? candidates
+    : candidates.filter((item) => item.type?.toUpperCase() === selectedType);
+  if (selectedId) {
+    return filtered.sort((a, b) => {
+      if (String(a.id) === String(selectedId)) return -1;
+      if (String(b.id) === String(selectedId)) return 1;
+      return 0;
+    });
+  }
+  return filtered;
+}, [items, selectedType, pageLocation.search, pageLocation.state]);
   // Always resolve access live from the API — the passed-in accessStatus is only
   // a starting guess for the very first render, never a substitute for the real check.
   useEffect(() => {
@@ -250,7 +262,7 @@ const filteredItems = useMemo(() => {
       
 
       <div className="flex justify-end">
-        <PageHero backOnly onBack={goToDashboard} />
+        <PageHero backOnly onBack={() => navigate(pageLocation.state?.fromGlobalSearch ? (pageLocation.state.returnTo || "/app/dashboard") : "/app/dashboard")} />
       </div>
       {error ? <Alert type="warning" message={error} showIcon style={{ borderRadius: 16 }} /> : null}
 <div className="mb-5 flex flex-wrap gap-2">

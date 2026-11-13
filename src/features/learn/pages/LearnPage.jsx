@@ -187,6 +187,11 @@ const unlocked =
           return matchesType && matchesSearch;
         })
         .sort((a, b) => {
+          const selectedId = params.get("videoId");
+          if (selectedId) {
+            if (String(a.id) === String(selectedId)) return -1;
+            if (String(b.id) === String(selectedId)) return 1;
+          }
           if (sortBy === "az") return a.title.localeCompare(b.title);
           if (sortBy === "za") return b.title.localeCompare(a.title);
           if (sortBy === "newest") {
@@ -222,7 +227,7 @@ const unlocked =
           <h1 className="m-0 text-2xl font-black text-[#9a2119]">Career &amp; Personality Videos</h1>
           <p className="mt-1 text-sm text-[#8c6c67]">Explore career and personality videos.</p>
         </div>
-        <PageHero backOnly onBack={goToDashboard} className="shrink-0" />
+        <PageHero backOnly onBack={() => navigate(pageLocation.state?.fromGlobalSearch ? (pageLocation.state.returnTo || "/app/dashboard") : "/app/dashboard")} className="shrink-0" />
       </div>
       {error ? <Alert type="warning" message={error} showIcon style={{ borderRadius: 16 }} /> : null}
 

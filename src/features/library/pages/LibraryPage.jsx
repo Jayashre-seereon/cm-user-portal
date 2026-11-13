@@ -1003,6 +1003,10 @@ const [indiaStates, setIndiaStates] = useState([]);
   }, [CAREER_LIBRARY_MODULE_ID]);
 
   useEffect(() => {
+    if (pageLocation.state?.fromGlobalSearch) {
+      archiveHistoryReadyRef.current = false;
+      return;
+    }
     if (!archiveHistoryReadyRef.current) return;
     const makeSnapshot = () => ({
       level: currentLevel,
@@ -1041,6 +1045,10 @@ const [indiaStates, setIndiaStates] = useState([]);
   }, [currentLevel]);
 
   useEffect(() => {
+    if (pageLocation.state?.fromGlobalSearch) {
+      archiveHistoryReadyRef.current = false;
+      return;
+    }
     const initialSnapshot = {
       level: currentLevel,
       country: selectedCountry,
@@ -1649,6 +1657,10 @@ useEffect(() => {
   }
 
   function handleBack() {
+    if (pageLocation.state?.fromGlobalSearch) {
+      navigate(pageLocation.state.returnTo || "/app/dashboard");
+      return;
+    }
     if (currentLevel === "streams") {
       goToDashboard();
       return;
