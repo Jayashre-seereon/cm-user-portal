@@ -9,7 +9,7 @@ export function resolveNavigationTarget(item) {
   const group = String(item.group || "").toLowerCase();
   const type = String(item.type || "").toLowerCase();
   const title = encodeURIComponent(item.title || "");
-  const id = item.id || item.navigation?.id || "";
+  const id = item.id || item.navigation?.id || item.navigation?.instituteId || item.navigation?.examId || item.navigation?.scholarshipId || "";
   const rawUrl = String(item.navigation?.url || item.navigation?.path || item.route || "").trim();
 
   // If external URL

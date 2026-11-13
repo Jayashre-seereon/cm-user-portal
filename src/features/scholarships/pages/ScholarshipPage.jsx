@@ -41,7 +41,7 @@ export default function ScholarshipPage() {
   useScrollToTopOnChange(selectedItem?.id || null);
   useBrowserStepHistory("scholarshipView", { selectedItem }, ({ selectedItem: previousItem }) => {
     setSelectedItem(previousItem || null);
-  });
+  }, !pageLocation.state?.fromGlobalSearch);
   const [unlockModalItem, setUnlockModalItem] = useState(null);
   const accessStatus = pageLocation.state?.accessStatus || "preview";
   const unlocked = accessStatus === "full" || isUnlocked("scholarship");
@@ -345,7 +345,7 @@ const filtered = useMemo(
         ) : null}
 
         <div className="flex justify-end">
-          <PageHero backOnly onBack={() => window.history.back()} />
+          <PageHero backOnly onBack={() => navigate(pageLocation.state?.fromGlobalSearch ? (pageLocation.state.returnTo || "/app/dashboard") : -1)} />
         </div>
         {error ? <Alert type="warning" title={error} showIcon style={{ borderRadius: 16 }} /> : null}
 
