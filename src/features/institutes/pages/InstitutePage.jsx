@@ -35,6 +35,15 @@ function normalizeInstituteSearch(value = "") {
     .replace(/[^\p{L}\p{N}]+/gu, "");
 }
 
+function sameInstituteName(left = "", right = "") {
+  const normalizedLeft = normalizeInstituteSearch(left);
+  const normalizedRight = normalizeInstituteSearch(right);
+  if (!normalizedLeft || !normalizedRight) return false;
+  return normalizedLeft === normalizedRight ||
+    (Math.min(normalizedLeft.length, normalizedRight.length) >= 8 &&
+      (normalizedLeft.includes(normalizedRight) || normalizedRight.includes(normalizedLeft)));
+}
+
 function getAccentByType(type = "") {
   const t = String(type).trim().toLowerCase();
 
@@ -103,7 +112,7 @@ export default function InstitutePage() {
         country: selected.country || "",
         type: selected.badge || selected.institute_type || "Institute",
         logo: selected.image || selected.logo || null,
-        website: selected.url || selected.website || "",
+        website: selected.url || selected.website || selected.website_url || selected.official_website || selected.officialWebsite || selected.institute_website || selected.instituteWebsite || selected.college_website || selected.collegeWebsite || selected.web_url || selected.website_link || selected.navigation?.url || "",
         createdAt: null,
       });
     }
@@ -111,6 +120,35 @@ export default function InstitutePage() {
       setSearch(q);
     }
   }, [location.search, location.state]);
+
+  // Search-index results can omit the website even when the directory record
+  // has it. Resolve the selected institute against the directory API by name
+  // and merge the canonical website into the selected card.
+  useEffect(() => {
+    const selected = location.state?.searchItem;
+    if (!selected) return;
+    let active = true;
+    async function loadDirectoryMatch() {
+      try {
+        const response = await getInstitutes({ search: selected.title || selected.name || "", limit: 50 });
+        if (!active) return;
+        const directoryItem = response.items.find((item) =>
+          sameInstituteName(item.name, selected.title || selected.name || "")
+        );
+        if (!directoryItem) return;
+        setSearchResult((current) => current ? {
+          ...directoryItem,
+          ...current,
+          url: directoryItem.url || current.url || current.website || current.navigation?.url || "",
+          website: directoryItem.website || current.website || current.url || current.navigation?.url || "",
+        } : current);
+      } catch (err) {
+        console.error("Failed to resolve institute website:", err);
+      }
+    }
+    loadDirectoryMatch();
+    return () => { active = false; };
+  }, [location.state]);
 
   // Global search results can point to institutes on any of the 505 pages.
   // Resolve the query through the same search index and add its match even
@@ -155,7 +193,7 @@ export default function InstitutePage() {
             country: selected.country || "",
             type: selected.badge || selected.institute_type || "Institute",
             logo: selected.image || selected.logo || null,
-            website: selected.url || selected.website || "",
+            website: selected.url || selected.website || selected.website_url || selected.official_website || selected.officialWebsite || selected.institute_website || selected.instituteWebsite || selected.college_website || selected.collegeWebsite || selected.web_url || selected.website_link || "",
             createdAt: null,
           };
         });
@@ -295,16 +333,28 @@ export default function InstitutePage() {
    * ============================================================
    */
   const filtered = useMemo(
-    () =>
+    () => {
+      const matchingDirectoryItem = searchResult
+        ? items.find((item) => sameInstituteName(item.name, searchResult.name))
+        : null;
+      const selectedInstitute = matchingDirectoryItem
+        ? { ...searchResult, ...matchingDirectoryItem,
+            url: matchingDirectoryItem.url || searchResult.url || searchResult.website,
+            website: matchingDirectoryItem.website || searchResult.website || searchResult.url,
+          }
+        : searchResult;
       // A clicked global-search result is the user's exact selection. Keep it
       // visible directly; filtering that synthetic card again can discard it
       // when the backend's title/query formatting differs slightly.
-      (searchResult ? [
-        ...items.filter((item) => String(item.id) !== String(searchResult.id)),
-        searchResult,
+      return (selectedInstitute ? [
+        ...items.filter((item) =>
+          String(item.id) !== String(selectedInstitute.id) &&
+          !sameInstituteName(item.name, selectedInstitute.name)
+        ),
+        selectedInstitute,
       ] : items)
         .filter((item) => {
-          if (searchResult && String(item.id) === String(searchResult.id)) return true;
+          if (selectedInstitute && String(item.id) === String(selectedInstitute.id)) return true;
           const instituteType =
             item.type || item.institute_type || "";
 
@@ -318,9 +368,9 @@ export default function InstitutePage() {
           return matchesSearch;
         })
         .sort((a, b) => {
-          if (searchResult) {
-            if (String(a.id) === String(searchResult.id)) return -1;
-            if (String(b.id) === String(searchResult.id)) return 1;
+          if (selectedInstitute) {
+            if (String(a.id) === String(selectedInstitute.id)) return -1;
+            if (String(b.id) === String(selectedInstitute.id)) return 1;
           }
           if (a.createdAt && b.createdAt) {
             return (
@@ -330,7 +380,8 @@ export default function InstitutePage() {
           }
 
           return Number(b.id) - Number(a.id);
-        }),
+        });
+    },
     [items, search, searchResult]
   );
 
@@ -467,7 +518,15 @@ export default function InstitutePage() {
     setStateFilter("");
     setType("");
     setSearch("");
+    setSearchResult(null);
+    setRequestedInstituteId("");
     setPage(1);
+    // Global-search selections live in both the query string and router state.
+    // Remove them too, or the selected institute is re-added after clearing.
+    navigate("/app/institutes", {
+      replace: true,
+      state: { accessStatus: moduleMode },
+    });
   }
 
   return (
@@ -622,7 +681,8 @@ export default function InstitutePage() {
             const initials = getInitials(item.name);
 
             const websiteUrl =
-              item.url || item.website;
+              item.url || item.website || item.website_url || item.official_website || item.officialWebsite || item.institute_website || item.instituteWebsite || item.college_website || item.collegeWebsite || item.web_url || item.website_link;
+            const hasWebsite = Boolean(websiteUrl && websiteUrl !== "#");
 
             const isPreviewMode =
               moduleMode === "preview";
@@ -708,9 +768,9 @@ export default function InstitutePage() {
                       {item.state || ""}
                     </span>
 
-                    {websiteUrl ? (
+                    {hasWebsite ? (
                       <a
-                        href={websiteUrl}
+                        href={/^https?:\/\//i.test(websiteUrl) ? websiteUrl : `https://${websiteUrl}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => {

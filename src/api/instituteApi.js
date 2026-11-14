@@ -32,6 +32,14 @@ function formatDateDDMMYYYY(value) {
   return parsedDate.toLocaleDateString("en-GB");
 }
 
+function getInstituteWebsite(item = {}) {
+  const value = item.url || item.website || item.website_url || item.official_website || item.officialWebsite ||
+    item.institute_website || item.instituteWebsite || item.college_website || item.collegeWebsite || item.web_url || item.website_link || "";
+  const website = String(value).trim();
+  if (!website || website === "#") return "";
+  return /^https?:\/\//i.test(website) ? website : `https://${website}`;
+}
+
 function mapInstituteItem(item, index) {
   const state =
     item?.state?.trim() || "";
@@ -84,8 +92,8 @@ function mapInstituteItem(item, index) {
       stripHtml(item?.about) ||
       "About information is not available right now.",
 
-    website:
-      item?.url || "#",
+    url: getInstituteWebsite(item),
+    website: getInstituteWebsite(item),
 
     rank:
       item?.rank || "Top",
