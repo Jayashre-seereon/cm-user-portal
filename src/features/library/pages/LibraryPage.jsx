@@ -825,6 +825,7 @@ function InstituteFilterGroup({ scope, region, badge, emptyText, showLocationFil
 function InstituteCard({ inst, badge }) {
   const isOdisha = badge === "Odisha";
   const logo = inst?.logo || null;
+  const [logoFailed, setLogoFailed] = useState(false);
   const url = inst?.raw?.url || null;
   const admissionProcess = inst?.raw?.admission_process || null;
   const tentativeDate = inst?.raw?.tentative_date
@@ -859,14 +860,12 @@ function InstituteCard({ inst, badge }) {
 
       <div className="flex items-start gap-3 px-4 py-4">
         <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[18px] border border-[#f0e4e2] bg-[#fffaf8]">
-          {logo ? (
+          {logo && !logoFailed ? (
             <img
               src={logo}
               alt={inst.name}
-              className="h-full w-full object-cover"
-              onError={(e) => {
-                e.currentTarget.style.display = "none";
-              }}
+              className="h-full w-full object-contain p-1"
+              onError={() => setLogoFailed(true)}
             />
           ) : (
             <BankOutlined className="text-[20px] text-[#9a2119]" />
