@@ -318,7 +318,19 @@ export default function InstitutePage() {
    * CATEGORY CHANGE
    * ============================================================
    */
+  function exitGlobalSearchSelection() {
+    if (!searchResult && !search && !requestedInstituteId && !location.state?.searchItem) return;
+    setSearch("");
+    setSearchResult(null);
+    setRequestedInstituteId("");
+    navigate("/app/institutes", {
+      replace: true,
+      state: { accessStatus: moduleMode },
+    });
+  }
+
   function handleCategoryChange(value) {
+    exitGlobalSearchSelection();
     setCategory(value);
     setPage(1);
   }
@@ -354,7 +366,6 @@ export default function InstitutePage() {
         selectedInstitute,
       ] : items)
         .filter((item) => {
-          if (selectedInstitute && String(item.id) === String(selectedInstitute.id)) return true;
           const instituteType =
             item.type || item.institute_type || "";
 
@@ -482,6 +493,7 @@ export default function InstitutePage() {
    * ============================================================
    */
   function handleCountryChange(value) {
+    exitGlobalSearchSelection();
     setCountry(value?.toLowerCase() || "");
     setStateFilter("");
     setPage(1);
@@ -493,6 +505,7 @@ export default function InstitutePage() {
    * ============================================================
    */
   function handleStateChange(value) {
+    exitGlobalSearchSelection();
     setStateFilter(value || "");
     setPage(1);
   }
@@ -503,6 +516,7 @@ export default function InstitutePage() {
    * ============================================================
    */
   function handleTypeChange(value) {
+    exitGlobalSearchSelection();
     setType(value || "");
     setPage(1);
   }
