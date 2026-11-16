@@ -297,8 +297,8 @@ export default function SubscriptionPage() {
 
                   {/* Header Area */}
                   <div className={`p-5 ${isSelected ? "bg-brand/5" : "bg-gray-50/50"}`}>
-                    <div className="flex items-center justify-between gap-2 mb-3">
-                      <div className="text-sm font-bold text-ink/40 uppercase tracking-widest">
+                    <div className="mb-3 flex flex-col items-start gap-2">
+                      <div className="pr-14 text-sm font-bold text-ink/40 uppercase tracking-widest">
                         {plan.name}
                       </div>
                       {planStatusTag}
