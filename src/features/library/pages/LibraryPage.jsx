@@ -1845,6 +1845,16 @@ useEffect(() => {
   function renderDetailItem(detail, index) {
     const title = detail?.title || getItemTitle(detail);
     const Section = SectionCard;
+    const normalizedStreamName = normalizeStreamKey(selectedStream?.name);
+    const hideInstituteSections =
+      normalizedStreamName === "careerclusters" ||
+      (normalizedStreamName === "competitive" &&
+        [
+          "governmentjobsafter10th",
+          "governmentjobsafter12th",
+          "governmentjobsaftergraduation",
+          "governmentjobsafterpostgraduation",
+        ].includes(normalizeStreamKey(title)));
     const careerpaths = detail?.raw?.careerpaths || [];
     const entranceexams = detail?.raw?.entranceexams || [];
     const jobs = toList(detail?.jobs || detail?.jobScope);
@@ -1864,8 +1874,10 @@ useEffect(() => {
       ...(hasEntranceExams ? [{ id: `exams-${index}`, label: "Entrance Exams", icon: <SolutionOutlined /> }] : []),
       ...(hasJobs ? [{ id: `jobs-${index}`, label: "Job Scopes", icon: <RocketOutlined /> }] : []),
       ...(hasSalary ? [{ id: `salary-${index}`, label: "Salary Range", icon: <DollarOutlined /> }] : []),
-      { id: `top-out-${index}`, label: "Institutes outside Odisha", icon: <EnvironmentOutlined /> },
-      { id: `top-in-${index}`, label: "Institutes in Odisha", icon: <BankOutlined /> },
+      ...(!hideInstituteSections ? [
+        { id: `top-out-${index}`, label: "Institutes outside Odisha", icon: <EnvironmentOutlined /> },
+        { id: `top-in-${index}`, label: "Institutes in Odisha", icon: <BankOutlined /> },
+      ] : []),
       ];
 
     function scrollTo(id) {
@@ -2171,23 +2183,23 @@ className="inline-flex h-10 w-10 items-center justify-center rounded-full border
                 )}
               </Section>
               ) : null}
-              <Section
+              {!hideInstituteSections ? <Section
                 id={`top-out-${index}`}
                 icon={<EnvironmentOutlined />}
                 title="Institutes outside Odisha"
                 subtitle="All matching colleges outside Odisha."
               >
                 <InstituteFilterGroup scope={instituteScope} region="outside" emptyText="No colleges found in outside Odisha." />
-              </Section>
+              </Section> : null}
 
-              <Section
+              {!hideInstituteSections ? <Section
                   id={`top-in-${index}`}
                   icon={<BankOutlined />}
                   title="Institutes in Odisha"
                   subtitle="All matching Odisha colleges."
                 >
                   <InstituteFilterGroup scope={instituteScope} region="inside" badge="Odisha" emptyText="No Odisha colleges found." showLocationFilter={false} />
-              </Section>
+              </Section> : null}
 
           </div>
         </div>
