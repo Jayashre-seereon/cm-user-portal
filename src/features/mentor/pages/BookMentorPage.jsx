@@ -666,6 +666,12 @@ export default function BookMentorPage() {
 
   // ── Mentor detail / booking view ─────────────────────────────────────────
   if (activeMentor) {
+    const resumeUrl = String(activeMentor.resume || "").trim();
+    const resumeIsImage = /\.(?:jpe?g|png|gif|webp|svg|bmp)(?:[?#].*)?$/i.test(resumeUrl);
+    const expertProfileUrl = resumeUrl && resumeUrl !== activeMentor.image && !resumeIsImage
+      ? resumeUrl
+      : null;
+
     return (
       <ModuleScreen className="space-y-6 pb-24">
         <div className="motion-item flex items-start justify-between gap-4">
@@ -752,9 +758,9 @@ export default function BookMentorPage() {
           <StarFilled style={{ color: "#d4a017" }} />
           {Number(activeMentor.rating).toFixed(1)}
         </span>
-        {activeMentor.resume ? (
+        {expertProfileUrl ? (
   <Button
-    href={activeMentor.resume}
+    href={expertProfileUrl}
     target="_blank"
     rel="noopener noreferrer"
     icon={<FileTextOutlined />}
@@ -762,7 +768,12 @@ export default function BookMentorPage() {
   >
     Expert Profile
   </Button>
-) : null}
+) : (
+  <span className="inline-flex items-center gap-2 rounded-2xl border border-[#f0e4e2] bg-white px-4 py-2.5 font-bold text-[#8a7773]">
+    <FileTextOutlined />
+    No profile available
+  </span>
+)}
 
         <span className="inline-flex items-center gap-2.5 rounded-2xl bg-[#fdf0e4] px-4 py-2 font-bold text-[#241008]">
           <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#9a2119] text-white">
