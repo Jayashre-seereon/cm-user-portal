@@ -68,13 +68,20 @@ export async function signupUser(payload, tempToken) {
 }
 
 export async function logoutUser() {
-  const response = await api.post("/auth/logout");
+  const accessToken = useAuthStore.getState().accessToken;
+  const response = await api.post(
+    "/auth/logout",
+    { refreshToken: useAuthStore.getState().refreshToken || undefined },
+    accessToken ? { headers: { Authorization: `Bearer ${accessToken}` } } : undefined
+  );
   return response.data;
 }
 
 export function getApiErrorMessage(error, fallbackMessage = "Something went wrong") {
   if (error?.message === "Network Error") {
-    return `Network error. Check backend & URL: ${API_BASE_URL}`;
+    return import.meta.env.DEV
+      ? `Network error. Check backend & URL: ${API_BASE_URL}`
+      : "Network error. Please check your connection and try again.";
   }
 
   return error?.response?.data?.message || error?.message || fallbackMessage;

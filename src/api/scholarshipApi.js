@@ -1,5 +1,6 @@
 import api from "./axios";
 
+import { formatDate as formatSharedDate, formatCurrency as formatSharedCurrency } from "../utils/format";
 function stripHtml(value) {
   if (!value) {
     return "";
@@ -19,11 +20,7 @@ function formatDeadline(deadline) {
     return deadline;
   }
 
-  return parsedDate.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  return formatSharedDate(parsedDate);
 }
 
 function getDaysRemaining(deadline) {
@@ -79,7 +76,8 @@ function formatAmount(price) {
     return "Amount not available";
   }
 
-  return `Rs ${price} / year`;
+  const formatted = formatSharedCurrency(price);
+  return formatted ? `${formatted} / year` : `Rs ${price} / year`;
 }
 
 function formatRequirements(requirement) {
@@ -146,7 +144,6 @@ export async function getScholarshipById(
   moduleId,
   previewSessionId
 ) {
-   console.log("Inside getScholarshipById");
   const response = await api.get(`/scholarship/${id}`, {
     headers: {
       "x-module-id": moduleId,

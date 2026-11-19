@@ -13,7 +13,33 @@ function stripHtml(value) {
     .trim();
 }
 
-function formatNotificationDate(value) {
+function readStorageKey() {
+  const user = useAuthStore.getState().user;
+  const userId = user?.id ?? user?._id ?? user?.userId ?? "anon";
+  return `careermap-read-notifications:${userId}`;
+}
+
+function getReadIds() {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(readStorageKey()) || "[]");
+    return new Set(Array.isArray(parsed) ? parsed.map(String) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+// Read state is tracked per user on this device (the backend has no user-scoped read endpoint).
+export function markNotificationsRead(ids = []) {
+  try {
+    const current = getReadIds();
+    ids.forEach((id) => current.add(String(id)));
+    window.localStorage.setItem(readStorageKey(), JSON.stringify([...current].slice(-500)));
+  } catch {
+    // storage unavailable
+  }
+}
+
+function formatNotificationDate(value, withTime = false) {
   if (!value) {
     return "";
   }
@@ -22,6 +48,16 @@ function formatNotificationDate(value) {
 
   if (Number.isNaN(parsedDate.getTime())) {
     return String(value);
+  }
+
+  if (withTime) {
+    return parsedDate.toLocaleString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   }
 
   return parsedDate.toLocaleDateString("en-IN", {
@@ -33,7 +69,7 @@ function formatNotificationDate(value) {
 
 export function mapNotificationItem(item, index = 0) {
   const status = String(item?.status || "").trim().toLowerCase();
-  const unread = status === "pending";
+  const unread = status === "pending" && !getReadIds().has(String(item?.id ?? `notification-${index}`));
   const message = stripHtml(item?.message).replace(
     /Meeting link:\s*\S+/i,
     "The meeting link was sent to your email. Please check your inbox."
@@ -46,9 +82,9 @@ export function mapNotificationItem(item, index = 0) {
     target: String(item?.target || "").startsWith("user:") ? "For you" : (item?.target || "All users"),
     status: status || "pending",
     type: item?.type || "General",
-    createdAt: formatNotificationDate(item?.createdAt),
+    createdAt: formatNotificationDate(item?.createdAt, true),
     updatedAt: formatNotificationDate(item?.updatedAt),
-    time: formatNotificationDate(item?.createdAt) || "Just now",
+    time: formatNotificationDate(item?.createdAt, true) || "Just now",
     unread,
     raw: item,
   };

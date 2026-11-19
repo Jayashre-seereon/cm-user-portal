@@ -5,7 +5,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from "react-router-do
 import { getApiErrorMessage, loginWithPassword, sendOtp } from "../../../api/authApi";
 import { useAppState } from "../../../state/AppStateContext";
 import { useAuthStore } from "../../../store/authStore";
-import { formatOtpMobile, isValidEmail, isValidMobileNumber, isValidPassword, mapApiUserToProfile, normalizeMobile } from "../../../utils/auth";
+import { formatOtpMobile, isValidEmail, isValidMobileNumber, mapApiUserToProfile, normalizeMobile } from "../../../utils/auth";
 import { AuthShell } from "../components/AuthShell";
 import { authPrimaryButtonStyle } from "../components/authShared";
 
@@ -33,9 +33,7 @@ export default function LoginPage() {
   const emailError = isExistingUser && mode === "email" && values.email && !isValidEmail(values.email)
     ? "Enter a valid email address."
     : "";
-  const passwordError = isExistingUser && mode === "email" && values.password && !isValidPassword(values.password)
-    ? "Password must be at least 6 characters."
-    : "";
+  const passwordError = "";
 
   function update(key, value) {
     setValues((current) => ({ ...current, [key]: value }));
@@ -85,8 +83,8 @@ export default function LoginPage() {
 
       if (isExistingUser) {
         const loginOtpResponse = await sendOtp(formattedMobile, "login");
-        // TEMP-DEBUG: remove before production — passes OTP to next screen for testing
-        const devOtp = loginOtpResponse?.otp || loginOtpResponse?.data?.otp;
+        // Dev-only helper: never expose the OTP in production builds
+        const devOtp = import.meta.env.DEV ? (loginOtpResponse?.otp || loginOtpResponse?.data?.otp) : undefined;
         navigate(
           `/otp-verify?next=${encodeURIComponent(destination)}&identifier=${encodeURIComponent(formattedMobile)}&otpType=login`,
           { state: { devOtp } }
@@ -95,8 +93,8 @@ export default function LoginPage() {
       }
 
       const signupOtpResponse = await sendOtp(formattedMobile, "signup");
-      // TEMP-DEBUG: remove before production — passes OTP to next screen for testing
-      const devOtpSignup = signupOtpResponse?.otp || signupOtpResponse?.data?.otp;
+      // Dev-only helper: never expose the OTP in production builds
+      const devOtpSignup = import.meta.env.DEV ? (signupOtpResponse?.otp || signupOtpResponse?.data?.otp) : undefined;
       setOnboardingData(onboarding);
       setSignupForm({ mobile: normalizedMobile });
       navigate(
@@ -120,8 +118,8 @@ export default function LoginPage() {
       return;
     }
 
-    if (!isValidPassword(values.password)) {
-      setStatus({ type: "error", message: "Password must be at least 6 characters." });
+    if (!values.password) {
+      setStatus({ type: "error", message: "Enter your password." });
       return;
     }
 
@@ -235,7 +233,7 @@ export default function LoginPage() {
               type="primary"
               block
               size="large"
-              disabled={!isValidEmail(values.email) || !isValidPassword(values.password) || isSubmittingEmail}
+              disabled={!isValidEmail(values.email) || !values.password || isSubmittingEmail}
               onClick={handleEmailLogin}
               style={{ ...authPrimaryButtonStyle, width: "100%" }}
             >

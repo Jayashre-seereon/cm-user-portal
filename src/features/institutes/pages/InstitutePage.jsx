@@ -1,5 +1,5 @@
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Button, Select } from "antd";
 import {
   EnvironmentOutlined,
@@ -10,9 +10,8 @@ import {
 } from "@ant-design/icons";
 import { State } from "country-state-city";
 
-import { getInstitutes, getCategories } from "../../../api/instituteApi";
+import { getInstitutes, getCategories, getInstituteFilters } from "../../../api/instituteApi";
 import { globalSearch } from "../../../api/searchApi";
-import { institutes as fallbackInstitutes } from "../../../data/careermapData";
 import { ModuleScreen, PageHero } from "../../../components/ui";
 import {
   UnlockRedirectModal,
@@ -66,15 +65,20 @@ export default function InstitutePage() {
     return params.get("search") || params.get("q") || "";
   });
 
-  const [items, setItems] = useState(fallbackInstitutes);
+  const [items, setItems] = useState([]);
   const [error, setError] = useState("");
 
   // Backend filters
-  const [category, setCategory] = useState("");
+  // Filters and page are mirrored in the URL (see the sync effect below) so a
+  // refresh or Back from an institute keeps them.
+  const initialUrlParams = new URLSearchParams(window.location.search);
+  const [category, setCategory] = useState(() => initialUrlParams.get("category") || "");
   const [categories, setCategories] = useState([]);
-  const [country, setCountry] = useState("");
-  const [stateFilter, setStateFilter] = useState("");
-  const [type, setType] = useState("");
+  const [country, setCountry] = useState(() => (initialUrlParams.get("country") || "").toLowerCase());
+  const [stateFilter, setStateFilter] = useState(() => initialUrlParams.get("state") || "");
+  // Options that are valid for the current selection (null until loaded / if the request fails)
+  const [facets, setFacets] = useState(null);
+  const [type, setType] = useState(() => initialUrlParams.get("type") || "");
 
   const [unlockModalItem, setUnlockModalItem] = useState(null);
 
@@ -82,7 +86,8 @@ export default function InstitutePage() {
     location.state?.accessStatus || "preview"
   );
 
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(() => Math.max(Number(initialUrlParams.get("page")) || 1, 1));
+  const lastSearchRef = useRef(search);
   const [pagination, setPagination] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchResult, setSearchResult] = useState(null);
@@ -158,13 +163,15 @@ export default function InstitutePage() {
     setSearchResult(null);
     if (!search.trim()) return;
     let active = true;
+    const controller = new AbortController();
 
     async function loadSelectedInstitute() {
       try {
         const response = await globalSearch({
           query: search,
-          type: "institutions",
+          type: "institution",
           limit: 50,
+          signal: controller.signal,
         });
         if (!active) return;
 
@@ -172,13 +179,16 @@ export default function InstitutePage() {
           ? response.results
           : Object.values(response?.grouped || {}).flat();
         const normalizedSearch = normalizeInstituteSearch(search);
-        const selected = results.find((result) => {
-          const resultId = result?.id ?? result?.navigation?.id;
-          const resultTitle = normalizeInstituteSearch(result?.title || result?.name || "");
-          return (requestedInstituteId && String(resultId ?? "") === String(requestedInstituteId)) ||
-            resultTitle === normalizedSearch ||
-            resultTitle.includes(normalizedSearch);
-        });
+        const getResultId = (result) => result?.id ?? result?.navigation?.id;
+        const getResultTitle = (result) =>
+          normalizeInstituteSearch(result?.title || result?.name || "");
+        // Prefer the exact id, then an exact title, and only then a partial title match.
+        const selected =
+          (requestedInstituteId
+            ? results.find((result) => String(getResultId(result) ?? "") === String(requestedInstituteId))
+            : null) ||
+          results.find((result) => getResultTitle(result) === normalizedSearch) ||
+          results.find((result) => normalizedSearch && getResultTitle(result).includes(normalizedSearch));
         if (!selected) return;
 
         const selectedId = String(selected.id ?? selected.navigation?.id ?? requestedInstituteId ?? selected.title);
@@ -198,12 +208,18 @@ export default function InstitutePage() {
           };
         });
       } catch (err) {
+        if (err?.name === "CanceledError" || err?.name === "AbortError" || err?.code === "ERR_CANCELED") return;
         console.error("Failed to resolve selected institute:", err);
       }
     }
 
-    loadSelectedInstitute();
-    return () => { active = false; };
+    // Debounce so typing / changing the query does not fire a request per keystroke.
+    const timer = setTimeout(loadSelectedInstitute, 300);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [requestedInstituteId, search, location.state]);
 
   /*
@@ -251,6 +267,15 @@ export default function InstitutePage() {
   useEffect(() => {
     let active = true;
 
+    // A changed search term always starts from page 1 (no request for the old page).
+    if (lastSearchRef.current !== search) {
+      lastSearchRef.current = search;
+      if (page !== 1) {
+        setPage(1);
+        return undefined;
+      }
+    }
+
     async function loadInstitutes() {
       try {
         setLoading(true);
@@ -259,6 +284,7 @@ export default function InstitutePage() {
         const response = await getInstitutes({
           page,
           limit: 30,
+          search: search.trim(),
           category,
           country,
           state: stateFilter,
@@ -271,6 +297,8 @@ export default function InstitutePage() {
         setPagination(response?.pagination || null);
       } catch (loadError) {
         if (active) {
+          setItems([]);
+          setPagination(null);
           setError(
             loadError?.response?.data?.message ||
               loadError?.message ||
@@ -289,17 +317,56 @@ export default function InstitutePage() {
     return () => {
       active = false;
     };
-  }, [page, category, country, stateFilter, type]);
+  }, [page, category, country, stateFilter, type, search]);
+
+  // Keep filters + page in the URL and scroll to the top when the page changes.
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      const sync = (key, value) => {
+        if (value) url.searchParams.set(key, value);
+        else url.searchParams.delete(key);
+      };
+      sync("category", category);
+      sync("country", country);
+      sync("state", stateFilter);
+      sync("type", type);
+      sync("page", page > 1 ? String(page) : "");
+      const next = `${url.pathname}${url.search}${url.hash}`;
+      if (next !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
+        window.history.replaceState(window.history.state, "", next);
+      }
+    } catch {
+      // URL sync is best effort only
+    }
+  }, [category, country, stateFilter, type, page]);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [page]);
 
   /*
    * ============================================================
-   * COUNTRY CHANGE
+   * FILTER OPTIONS
+   * Every dropdown only offers values that still have institutes for the
+   * OTHER selected filters, so category / country / state / type can be
+   * chosen in any order and the lists are always correct.
    * ============================================================
    */
   useEffect(() => {
-    setStateFilter("");
-    setPage(1);
-  }, [country]);
+    let active = true;
+    getInstituteFilters({ category, country, state: stateFilter, type })
+      .then((result) => {
+        if (active) setFacets(result);
+      })
+      .catch((err) => {
+        console.error("Failed to load institute filter options:", err);
+        if (active) setFacets(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [category, country, stateFilter, type]);
 
   /*
    * ============================================================
@@ -307,11 +374,18 @@ export default function InstitutePage() {
    * ============================================================
    */
   const categoryOptions = useMemo(() => {
+    if (facets) {
+      const list = facets.categories.map((cat) => ({ value: cat.title, label: cat.title }));
+      if (category && !list.some((opt) => opt.value.toLowerCase() === category.toLowerCase())) {
+        list.push({ value: category, label: category });
+      }
+      return list;
+    }
     return categories.map((cat) => ({
       value: cat.title || cat.name || String(cat.id),
       label: cat.title || cat.name || String(cat.id),
     }));
-  }, [categories]);
+  }, [categories, facets, category]);
 
   /*
    * ============================================================
@@ -355,45 +429,18 @@ export default function InstitutePage() {
             website: matchingDirectoryItem.website || searchResult.website || searchResult.url,
           }
         : searchResult;
-      // A clicked global-search result is the user's exact selection. Keep it
-      // visible directly; filtering that synthetic card again can discard it
-      // when the backend's title/query formatting differs slightly.
-      return (selectedInstitute ? [
+      // A clicked global-search result is the user's exact selection. Show it
+      // first; everything else keeps the server's order (and search filtering
+      // is done by the server so it applies across all pages).
+      return selectedInstitute ? [
+        selectedInstitute,
         ...items.filter((item) =>
           String(item.id) !== String(selectedInstitute.id) &&
           !sameInstituteName(item.name, selectedInstitute.name)
         ),
-        selectedInstitute,
-      ] : items)
-        .filter((item) => {
-          const instituteType =
-            item.type || item.institute_type || "";
-
-          const normalizedSearch = normalizeInstituteSearch(search);
-          const matchesSearch =
-            !normalizedSearch ||
-            normalizeInstituteSearch(item.name).includes(normalizedSearch) ||
-            normalizeInstituteSearch(item.location).includes(normalizedSearch) ||
-            normalizeInstituteSearch(instituteType).includes(normalizedSearch);
-
-          return matchesSearch;
-        })
-        .sort((a, b) => {
-          if (selectedInstitute) {
-            if (String(a.id) === String(selectedInstitute.id)) return -1;
-            if (String(b.id) === String(selectedInstitute.id)) return 1;
-          }
-          if (a.createdAt && b.createdAt) {
-            return (
-              new Date(b.createdAt) -
-              new Date(a.createdAt)
-            );
-          }
-
-          return Number(b.id) - Number(a.id);
-        });
+      ] : items;
     },
-    [items, search, searchResult]
+    [items, searchResult]
   );
 
   /*
@@ -405,6 +452,11 @@ export default function InstitutePage() {
    * ============================================================
    */
   const countryOptions = useMemo(() => {
+    if (facets) {
+      const names = facets.countries.map((c) => c.country);
+      if (country && !names.includes(country)) names.push(country);
+      return names;
+    }
     const list = [
       ...new Set(
         items
@@ -417,7 +469,7 @@ export default function InstitutePage() {
     ];
 
     return list;
-  }, [items]);
+  }, [items, facets, country]);
 
   /*
    * ============================================================
@@ -433,6 +485,14 @@ export default function InstitutePage() {
    * ============================================================
    */
   const stateOptions = useMemo(() => {
+    if (facets) {
+      const list = facets.states.map((s) => ({ value: s.state, label: s.state }));
+      if (stateFilter && !list.some((opt) => opt.value === stateFilter)) {
+        list.push({ value: stateFilter, label: stateFilter });
+      }
+      return list;
+    }
+
     if (!country) return [];
 
     if (country.toLowerCase() === "india") {
@@ -463,7 +523,7 @@ export default function InstitutePage() {
       value: s,
       label: s,
     }));
-  }, [items, country]);
+  }, [items, country, facets, stateFilter]);
 
   /*
    * ============================================================
@@ -476,16 +536,19 @@ export default function InstitutePage() {
    * current API response contains only Government records.
    * ============================================================
    */
-  const typeOptions = [
-    {
-      value: "Government",
-      label: "Government",
-    },
-    {
-      value: "Private",
-      label: "Private",
-    },
-  ];
+  const typeOptions = useMemo(() => {
+    if (facets) {
+      const list = facets.types.map((t) => ({ value: t.type, label: t.type }));
+      if (type && !list.some((opt) => opt.value.toLowerCase() === type.toLowerCase())) {
+        list.push({ value: type, label: type });
+      }
+      return list;
+    }
+    return [
+      { value: "Government", label: "Government" },
+      { value: "Private", label: "Private" },
+    ];
+  }, [facets, type]);
 
   /*
    * ============================================================
@@ -495,7 +558,6 @@ export default function InstitutePage() {
   function handleCountryChange(value) {
     exitGlobalSearchSelection();
     setCountry(value?.toLowerCase() || "");
-    setStateFilter("");
     setPage(1);
   }
 
@@ -631,7 +693,6 @@ export default function InstitutePage() {
           value={stateFilter || undefined}
           onChange={handleStateChange}
           options={stateOptions}
-          disabled={!country}
           style={{ minWidth: 160 }}
           className="pill-select"
         />

@@ -26,7 +26,7 @@ import { moduleCards } from "../../data/careermapData";
 const CATEGORY_TABS = [
   { key: "all", label: "All", groupKey: null },
   { key: "modules", label: "Modules", groupKey: "modules", types: ["module"] },
-  { key: "careers", label: "Careers", groupKey: "careers", types: ["stream", "category", "secondcategory", "subcategory", "careerpath"] },
+  { key: "careers", label: "Careers", groupKey: "careers", groupKeys: ["careers", "careerPaths"], types: ["stream", "category", "secondcategory", "subcategory", "careerpath"] },
   { key: "institutions", label: "Colleges", groupKey: "institutions", types: ["institution", "college"] },
   { key: "entranceExams", label: "Exams", groupKey: "entranceExams", types: ["entranceexam", "exam"] },
   { key: "mentors", label: "Mentors", groupKey: "mentors", types: ["mentor"] },
@@ -43,6 +43,26 @@ function normalizeSearchText(value = "") {
     .replace(/[\u0300-\u036f]/g, "")
     .toLocaleLowerCase()
     .replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
+const MIN_QUERY_LENGTH = 2;
+
+function getTabGroupKeys(tab) {
+  if (Array.isArray(tab.groupKeys)) return tab.groupKeys;
+  return tab.groupKey ? [tab.groupKey] : [];
+}
+
+// Word-prefix match ("lib" -> "Career Library"), instead of a substring match on
+// the space-stripped title where short queries hit unrelated modules.
+function matchesWordPrefix(title = "", normalizedQuery = "") {
+  if (!normalizedQuery) return false;
+  const words = String(title)
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+  return words.some((_, index) => words.slice(index).join("").startsWith(normalizedQuery));
 }
 
 function getTypeConfig(item = {}) {
@@ -174,6 +194,7 @@ export default function GlobalSearchBar({ className = "" }) {
   const containerRef = useRef(null);
   const inputRef = useRef(null);
   const abortControllerRef = useRef(null);
+  const requestIdRef = useRef(0);
 
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
@@ -184,6 +205,7 @@ export default function GlobalSearchBar({ className = "" }) {
     total: 0,
     results: [],
     grouped: {},
+    query: "",
   });
   const [lockedModule, setLockedModule] = useState(null);
 
@@ -191,9 +213,13 @@ export default function GlobalSearchBar({ className = "" }) {
   useEffect(() => {
     const trimmed = query.trim();
 
-    if (!trimmed) {
+    // Invalidate any request still in flight for an older query.
+    const requestId = ++requestIdRef.current;
+
+    if (trimmed.length < MIN_QUERY_LENGTH) {
       setIsLoading(false);
-      setSearchData({ total: 0, results: [], grouped: {} });
+      setSearchData({ total: 0, results: [], grouped: {}, query: "" });
+      if (!trimmed) setActiveTab("all");
       return;
     }
 
@@ -214,6 +240,7 @@ export default function GlobalSearchBar({ className = "" }) {
           signal: controller.signal,
         });
 
+        if (requestId !== requestIdRef.current) return;
         if (response && response.success !== false) {
           const entityResults = Array.isArray(response.results) ? response.results : [];
           const normalizedQuery = normalizeSearchText(trimmed);
@@ -230,16 +257,20 @@ export default function GlobalSearchBar({ className = "" }) {
             const name = normalizeSearchText(item.title || item.name || "");
             return normalizedQuery && name.includes(normalizedQuery);
           });
+          // Same-name institutions are collapsed by normalised name + location
           const normalizedInstituteResults = [...new Map(
             [...localInstituteMatches, ...instituteResults].map((item) => [
-              String(item.id ?? item.navigation?.id ?? item.title),
+              `${normalizeSearchText(item.title || item.name || "")}|${
+                normalizeSearchText(item.state || item.subtitle || "") ||
+                String(item.id ?? item.navigation?.id ?? "")
+              }`,
               item,
             ])
           ).values()];
           const nonInstituteResults = entityResults.filter((item) => !instituteResults.includes(item));
           const mergedEntityResults = [...nonInstituteResults, ...normalizedInstituteResults];
           const moduleResults = moduleCards
-            .filter((module) => normalizeSearchText(module.title).includes(normalizedQuery))
+            .filter((module) => matchesWordPrefix(module.title, normalizedQuery))
             .map((module) => ({
               id: `module:${module.route}`,
               title: module.title,
@@ -253,12 +284,13 @@ export default function GlobalSearchBar({ className = "" }) {
           const grouped = { ...(response.grouped || {}) };
           if (normalizedInstituteResults.length) grouped.institutions = normalizedInstituteResults;
           grouped.modules = moduleResults;
-          const total = (typeof response.total === "number" ? response.total : mergedEntityResults.length) + moduleResults.length;
+          const total = results.length;
 
           setSearchData({
             total,
             results,
             grouped,
+            query: trimmed,
           });
           setHighlightedIndex(0);
         }
@@ -267,7 +299,7 @@ export default function GlobalSearchBar({ className = "" }) {
           console.error("Global search error:", err);
         }
       } finally {
-        setIsLoading(false);
+        if (requestId === requestIdRef.current) setIsLoading(false);
       }
     }, 300);
 
@@ -312,9 +344,12 @@ export default function GlobalSearchBar({ className = "" }) {
     const currentTabConfig = CATEGORY_TABS.find((t) => t.key === activeTab);
     if (!currentTabConfig) return results;
 
-    // Check grouped object first
-    if (currentTabConfig.groupKey && Array.isArray(grouped[currentTabConfig.groupKey]) && grouped[currentTabConfig.groupKey].length > 0) {
-      return grouped[currentTabConfig.groupKey];
+    // Check grouped object first (a tab can span several groups, e.g. careers + careerPaths)
+    const groupedItems = getTabGroupKeys(currentTabConfig).flatMap((key) =>
+      Array.isArray(grouped[key]) ? grouped[key] : []
+    );
+    if (groupedItems.length > 0) {
+      return groupedItems;
     }
 
     // Fallback to filtering results array
@@ -322,7 +357,7 @@ export default function GlobalSearchBar({ className = "" }) {
       const itemGroup = String(item.group || "").toLowerCase();
       const itemType = String(item.type || "").toLowerCase();
 
-      if (currentTabConfig.groupKey && itemGroup === currentTabConfig.groupKey.toLowerCase()) {
+      if (getTabGroupKeys(currentTabConfig).some((key) => itemGroup === key.toLowerCase())) {
         return true;
       }
       if (currentTabConfig.types && currentTabConfig.types.includes(itemType)) {
@@ -337,14 +372,18 @@ export default function GlobalSearchBar({ className = "" }) {
     const counts = { all: searchData.results.length };
     CATEGORY_TABS.forEach((tab) => {
       if (tab.key === "all") return;
-      if (tab.groupKey && Array.isArray(searchData.grouped?.[tab.groupKey])) {
-        counts[tab.key] = searchData.grouped[tab.groupKey].length;
+      const tabGroupKeys = getTabGroupKeys(tab);
+      if (tabGroupKeys.some((key) => Array.isArray(searchData.grouped?.[key]))) {
+        counts[tab.key] = tabGroupKeys.reduce(
+          (sum, key) => sum + (Array.isArray(searchData.grouped?.[key]) ? searchData.grouped[key].length : 0),
+          0
+        );
       } else {
         counts[tab.key] = searchData.results.filter((item) => {
           const itemGroup = String(item.group || "").toLowerCase();
           const itemType = String(item.type || "").toLowerCase();
           return (
-            (tab.groupKey && itemGroup === tab.groupKey.toLowerCase()) ||
+            tabGroupKeys.some((key) => itemGroup === key.toLowerCase()) ||
             (tab.types && tab.types.includes(itemType))
           );
         }).length;
@@ -360,6 +399,22 @@ export default function GlobalSearchBar({ className = "" }) {
     }
     return CATEGORY_TABS.filter((tab) => tab.key === "all" || tabCounts[tab.key] > 0);
   }, [query, searchData, tabCounts]);
+
+  // Fall back to "All" when the selected tab has no results for the new query
+  useEffect(() => {
+    if (activeTab !== "all" && !visibleTabs.some((tab) => tab.key === activeTab)) {
+      setActiveTab("all");
+    }
+  }, [activeTab, visibleTabs]);
+
+  // Keep the keyboard highlight inside the (possibly shorter) list
+  useEffect(() => {
+    setHighlightedIndex((prev) => Math.min(prev, Math.max(filteredResults.length - 1, 0)));
+  }, [filteredResults.length]);
+
+  useEffect(() => {
+    setHighlightedIndex(0);
+  }, [activeTab]);
 
   async function handleSelectItem(item) {
     if (!item) return;
@@ -403,7 +458,7 @@ export default function GlobalSearchBar({ className = "" }) {
     const targetUrl = openModuleLanding ? resolvedPath : resolvedUrl;
     setIsOpen(false);
     setQuery("");
-    setSearchData({ total: 0, results: [], grouped: {} });
+    setSearchData({ total: 0, results: [], grouped: {}, query: "" });
 
     if (/^https?:\/\//i.test(targetUrl)) {
       window.location.href = targetUrl;
@@ -457,8 +512,10 @@ export default function GlobalSearchBar({ className = "" }) {
       }
     } else if (e.key === "Enter") {
       e.preventDefault();
+      // Ignore Enter while results are loading or belong to an older query
+      if (isLoading || searchData.query !== query.trim()) return;
       if (filteredResults.length > 0) {
-        handleSelectItem(filteredResults[highlightedIndex] || filteredResults[0]);
+        handleSelectItem(filteredResults[Math.min(highlightedIndex, filteredResults.length - 1)]);
       }
     } else if (e.key === "Escape") {
       e.preventDefault();
@@ -469,7 +526,7 @@ export default function GlobalSearchBar({ className = "" }) {
 
   function handleClear() {
     setQuery("");
-    setSearchData({ total: 0, results: [], grouped: {} });
+    setSearchData({ total: 0, results: [], grouped: {}, query: "" });
     setActiveTab("all");
     inputRef.current?.focus();
   }
@@ -591,7 +648,7 @@ export default function GlobalSearchBar({ className = "" }) {
 
                   return (
                     <div
-                      key={`${item.id || item.title}-${item.type}-${index}`}
+                      key={`${item.type}:${item.id || item.title}`}
                       onMouseDown={(e) => {
                         e.preventDefault();
                         handleSelectItem(item);
@@ -643,7 +700,13 @@ export default function GlobalSearchBar({ className = "" }) {
             )}
 
             {/* 3. Empty State */}
-            {hasQuery && !isLoading && !hasResults && (
+            {hasQuery && !isLoading && !hasResults && query.trim().length < MIN_QUERY_LENGTH && (
+              <div className="py-8 text-center text-[12px] text-[#8c6c67]">
+                Type at least {MIN_QUERY_LENGTH} characters to search.
+              </div>
+            )}
+
+            {hasQuery && !isLoading && !hasResults && query.trim().length >= MIN_QUERY_LENGTH && (
               <div className="py-8 text-center">
                 <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-[#fdf0ed] text-[#9a2119]">
                   <SearchOutlined className="text-xl" />

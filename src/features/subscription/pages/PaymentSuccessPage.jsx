@@ -2,64 +2,54 @@ import { useEffect, useMemo, useState } from "react";
 import { Button, Divider, List, Typography } from "antd";
 import { useSearchParams } from "react-router-dom";
 import { ArrowRightOutlined, CheckCircleOutlined, LockOutlined } from "@ant-design/icons";
-import { subscriptions as staticSubscriptions } from "../../../data/careermapData";
-import { getPlans } from "../../../api/subscriptionApi";
 import { ModuleScreen } from "../../../components/ui";
 import { useAppState } from "../../../state/AppStateContext";
 import { usePortalNavigation } from "../../portal/components/portalPageShared";
+import { formatCurrency } from "../../../utils/format";
 
 const { Text } = Typography;
 
 export default function PaymentSuccessPage() {
-  const { activatePlan, activePlanId, refreshUserData, subscriptionRecords } = useAppState();
+  const { refreshUserData, subscriptionRecords } = useAppState();
   const { navigate } = usePortalNavigation();
   const [params] = useSearchParams();
   const planId = params.get("planId");
   const returnTo = params.get("returnTo");
   const transactionId = params.get("transactionId");
 
-  const [apiPlans, setApiPlans] = useState([]);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    let active = true;
     async function init() {
       try {
-        const plans = await getPlans();
-        if (Array.isArray(plans)) setApiPlans(plans);
-      } catch {}
-
-      if (typeof refreshUserData === "function") {
-        await refreshUserData();
+        if (typeof refreshUserData === "function") {
+          await refreshUserData();
+        }
+      } finally {
+        if (active) setLoaded(true);
       }
     }
     init();
+    return () => {
+      active = false;
+    };
   }, []);
 
-  const plan = useMemo(() => {
-    const foundApi = apiPlans.find((p) => String(p.id) === String(planId));
-    if (foundApi) return foundApi;
-
-    const foundRecord = (subscriptionRecords || []).find((r) => String(r.planId) === String(planId));
-    if (foundRecord) return { name: foundRecord.planName || foundRecord.subscriptionName, price: foundRecord.price || foundRecord.amount };
-
-    const foundStatic = staticSubscriptions.find((item) => String(item.id) === String(planId));
-    if (foundStatic) return foundStatic;
-
-    return { name: "Career Plan", price: "₹3,000" };
-  }, [apiPlans, planId, subscriptionRecords]);
-  const accessUntil = useMemo(() => {
-    const nextYear = new Date();
-    nextYear.setFullYear(nextYear.getFullYear() + 1);
-    return nextYear.toLocaleString("en-US", {
-      month: "short",
-      year: "numeric",
-    });
-  }, []);
-
-  useEffect(() => {
-    if (plan?.id && activePlanId !== plan.id) {
-      activatePlan(plan.id);
-    }
-  }, [activePlanId, activatePlan, plan?.id]);
+  // Success is only shown for a subscription the backend actually reports as active.
+  const record = useMemo(
+    () =>
+      planId
+        ? (subscriptionRecords || []).find(
+            (r) => String(r.planId) === String(planId) && String(r.status || "").toLowerCase() === "active"
+          ) || null
+        : null,
+    [planId, subscriptionRecords]
+  );
+  const plan = record
+    ? { name: record.planName || record.subscriptionName || "your plan", price: record.price || record.amount || "" }
+    : null;
+  const accessUntil = record?.expiryDate && record.expiryDate !== "Expiry date not available" ? record.expiryDate : "";
 
   function resolveReturnPath(path) {
     if (!path) {
@@ -83,8 +73,35 @@ export default function PaymentSuccessPage() {
 
   const handleContinue = () => {
     const destination = resolveReturnPath(returnTo);
-    navigate(destination);
+    navigate(destination, { replace: true });
   };
+
+  if (!record) {
+    return (
+      <ModuleScreen maxWidthClass="max-w-5xl" className="flex min-h-[72vh] items-center justify-center py-10">
+        <div className="w-full max-w-xl rounded-2xl border border-[#eee2df] bg-white px-7 py-10 text-center shadow-[0_16px_42px_rgba(41,24,20,0.07)]">
+          <h1 className="m-0 text-2xl font-bold text-[#1a0a09]">
+            {loaded ? "We could not confirm a payment" : "Verifying your payment..."}
+          </h1>
+          <p className="mb-0 mt-3 text-sm leading-6 text-[#756965]">
+            {loaded
+              ? "No active subscription was found for this payment. If you were charged, please check Profile > Subscription in a few minutes or contact support@careermap.in."
+              : "Please wait while we confirm your subscription."}
+          </p>
+          {loaded ? (
+            <Button
+              type="primary"
+              size="large"
+              onClick={() => navigate("/app/dashboard", { replace: true })}
+              className="!mt-6 !h-11 !rounded-lg !border-[#a6251d] !bg-[#a6251d] !font-semibold"
+            >
+              Go to dashboard
+            </Button>
+          ) : null}
+        </div>
+      </ModuleScreen>
+    );
+  }
 
   return (
     <ModuleScreen maxWidthClass="max-w-5xl" className="flex min-h-[72vh] items-center justify-center py-10">
@@ -100,7 +117,7 @@ export default function PaymentSuccessPage() {
     Your account is now upgraded to <strong className="!text-white">{plan.name}</strong>. You can continue using your new benefits right away.
   </p>
   <div className="mt-8 border-t border-white/20 pt-5 text-sm !text-white">
-    A confirmation email has been sent to your registered address.
+    You can view this subscription any time under Profile &gt; Subscription.
   </div>
 </section>
 
@@ -117,11 +134,11 @@ export default function PaymentSuccessPage() {
               split={false}
               className="!mt-4 !p-0"
               dataSource={[
-                ["Order ID", transactionId || "TXN-CONFIRMED"],
+                ["Order ID", transactionId || (record.transactionId !== "Transaction not available" ? record.transactionId : "")],
                 ["Selected plan", plan.name],
-                ["Amount paid", plan.price],
+                ["Amount paid", formatCurrency(plan.price) || plan.price],
                 ["Access until", accessUntil],
-              ]}
+              ].filter(([, value]) => value)}
               renderItem={([label, value]) => (
                 <List.Item className="!flex !items-baseline !justify-between !gap-4 !border-none !px-0 !py-3">
                   <span className="text-sm text-[#756965]">{label}</span>

@@ -1,5 +1,6 @@
 import api from "./axios";
 
+import { formatDate as formatSharedDate } from "../utils/format";
 function formatCategoryLabel(category) {
   if (!category) {
     return "General";
@@ -22,11 +23,7 @@ function formatMasterclassTime(time) {
     return time;
   }
 
-  return parsedDate.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  return formatSharedDate(parsedDate);
 }
 
 function mapMasterclassItem(item, index) {

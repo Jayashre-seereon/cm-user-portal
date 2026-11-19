@@ -118,7 +118,7 @@ function MasterClassCard({ item, unlocked, detailUnlocked, onWatch }) {
 export default function LearnPage() {
   const { canAccessFreeDetail, registerFreeDetailAccess } = useAppState();
   const { navigate, location, goToDashboard } = usePortalNavigation();
-  const [params] = useSearchParams();
+  const [params, setSearchParams] = useSearchParams();
 const pageLocation = useLocation();
 
 const MASTERCLASS_MODULE_ID =
@@ -174,6 +174,21 @@ const unlocked =
     if (nextSortBy) setSortBy(nextSortBy);
   }, [params]);
 
+  function updateUrlParam(key, value, defaultValue) {
+    const next = new URLSearchParams(params);
+    if (value && value !== defaultValue) next.set(key, value);
+    else next.delete(key);
+    setSearchParams(next, { replace: true });
+  }
+
+  const activeSearchText = (params.get("search") || params.get("video") || params.get("q") || "").trim();
+
+  function clearSearchParam() {
+    const next = new URLSearchParams(params);
+    ["search", "video", "q", "videoId"].forEach((key) => next.delete(key));
+    setSearchParams(next, { replace: true });
+  }
+
   const filtered = useMemo(
     () => {
       const q = (params.get("search") || params.get("video") || params.get("q") || "").toLowerCase().trim();
@@ -192,15 +207,17 @@ const unlocked =
             if (String(a.id) === String(selectedId)) return -1;
             if (String(b.id) === String(selectedId)) return 1;
           }
-          if (sortBy === "az") return a.title.localeCompare(b.title);
-          if (sortBy === "za") return b.title.localeCompare(a.title);
+          if (sortBy === "az") return String(a.title || "").localeCompare(String(b.title || ""));
+          if (sortBy === "za") return String(b.title || "").localeCompare(String(a.title || ""));
           if (sortBy === "newest") {
             if (a.createdAt && b.createdAt) {
               return new Date(b.createdAt) - new Date(a.createdAt);
             }
             return Number(b.id) - Number(a.id); // fallback if no createdAt
           }
-          return b.views - a.views; // popular
+          const viewDiff = (Number(b.views) || 0) - (Number(a.views) || 0);
+          if (viewDiff !== 0) return viewDiff; // popular
+          return Number(b.id) - Number(a.id) || 0;
         });
     },
     [items, params, sortBy, videoType]
@@ -237,7 +254,10 @@ const unlocked =
     <button
       key={item}
       type="button"
-      onClick={() => setVideoType(item)}
+      onClick={() => {
+        setVideoType(item);
+        updateUrlParam("videoType", item, "All");
+      }}
       className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
         videoType === item
           ? "bg-[#9a2119] text-white"
@@ -248,6 +268,15 @@ const unlocked =
     </button>
   ))}
 
+  {activeSearchText ? (
+    <span className="inline-flex items-center gap-2 rounded-full bg-[#fdf0ee] px-4 py-2 text-sm font-semibold text-[#9a2119]">
+      Search: {activeSearchText}
+      <button type="button" aria-label="Clear search" onClick={clearSearchParam} className="border-0 bg-transparent p-0 font-black text-[#9a2119]">
+        &times;
+      </button>
+    </span>
+  ) : null}
+
   {/* Sort */}
   {[
     { label: "A-Z", value: "az" },
@@ -256,7 +285,10 @@ const unlocked =
     <button
       key={item.value}
       type="button"
-      onClick={() => setSortBy(item.value)}
+      onClick={() => {
+        setSortBy(item.value);
+        updateUrlParam("sortBy", item.value, "newest");
+      }}
       className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
         sortBy === item.value
           ? "bg-[#9a2119] text-white"

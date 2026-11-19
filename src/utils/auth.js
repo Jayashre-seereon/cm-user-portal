@@ -19,11 +19,21 @@ export function isValidEmail(value = "") {
 }
 
 export function isValidMobileNumber(value = "") {
-  return normalizeMobile(value).length === 10;
+  // Indian mobile numbers are 10 digits and start with 6-9
+  return /^[6-9]\d{9}$/.test(normalizeMobile(value));
 }
 
 export function isValidPassword(value = "", minLength = 6) {
   return String(value).trim().length >= minLength;
+}
+
+export const PASSWORD_POLICY_MESSAGE =
+  "Password must be at least 8 characters and include a letter and a number.";
+
+// Policy for SETTING a password (signup, reset, change). Never used on login so older passwords still work.
+export function isStrongPassword(value = "") {
+  const v = String(value);
+  return v.length >= 8 && v.length <= 128 && /[A-Za-z]/.test(v) && /\d/.test(v);
 }
 
 export function splitFullName(fullName = "") {

@@ -11,6 +11,7 @@ import {
 } from "@ant-design/icons";
 import { featuredInstitutes, featuredMentors, featuredScholarships, moduleCards, palette } from "../data/careermapData";
 
+import { formatDate as formatSharedDate, formatCurrency as formatSharedCurrency } from "./format";
 function formatDateDDMMYYYY(value) {
   if (!value) {
     return "";
@@ -22,7 +23,7 @@ function formatDateDDMMYYYY(value) {
     return String(value);
   }
 
-  return parsedDate.toLocaleDateString("en-GB");
+  return formatSharedDate(parsedDate);
 }
 
 function buildInitials(name = "", fallback = "M") {
@@ -165,13 +166,9 @@ export function buildDashboardScholarships(items = []) {
   return items.map((item) => ({
     id: item.id,
     name: item.name || "",
-    amount: item.price ? `Rs ${item.price} / year` : "",
+    amount: item.price ? `${formatSharedCurrency(item.price) || `Rs ${item.price}`} / year` : "",
     deadline: item.deadline
-      ? new Date(item.deadline).toLocaleDateString("en-IN", {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-        })
+      ? formatSharedDate(new Date(item.deadline))
       : "",
     tag: item.type || "",
   }));

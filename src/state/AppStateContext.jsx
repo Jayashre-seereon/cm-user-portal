@@ -1,8 +1,9 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { getDashboard } from "../api/dashboardApi";
 import { useAuthStore } from "../store/authStore";
 import { getNotifications } from "../api/notificationApi";
 import { getMentorBookings, getSubscriptions, getTestHistory } from "../api/profile";
+import { formatCurrency, formatDate as formatSharedDate } from "../utils/format";
 
 const STORAGE_KEY = "careermap-userportal-state";
 const emptyUserProfile = {
@@ -27,7 +28,45 @@ const planFeatures = {
   abroad: ["abroad-consultancy"],
 };
 
+// Feature keys unlocked by the modules that a plan includes (server-driven).
+const MODULE_FEATURE_PATTERNS = [
+  [/psychometric|assessment|\btest\b/i, "psychometric-test"],
+  [/mentor/i, "book-mentor"],
+  [/master\s*class/i, "master-class"],
+  [/scholar/i, "scholarship"],
+  [/abroad/i, "abroad-consultancy"],
+  [/newsletter/i, "newsletter"],
+  [/quiz/i, "quiz"],
+  [/library|career\s*path/i, "career-library"],
+];
+
+function deriveFeaturesFromSubscriptions(items = []) {
+  const features = new Set();
+  items.forEach((item) => {
+    const modules = Array.isArray(item?.plan?.modules) ? item.plan.modules : [];
+    modules.forEach((module) => {
+      const title = String(module?.title ?? module?.name ?? module ?? "");
+      MODULE_FEATURE_PATTERNS.forEach(([pattern, feature]) => {
+        if (pattern.test(title)) features.add(feature);
+      });
+    });
+  });
+  return Array.from(features);
+}
+
+// A subscription is active only when its status is active and it has not expired.
+function isActiveSubscription(item) {
+  if (String(item?.status || "").toLowerCase() !== "active") return false;
+  const end = item?.endDate || item?.expiryDate || item?.expiry_date || item?.validUntil;
+  if (end) {
+    const endTime = new Date(end).getTime();
+    if (!Number.isNaN(endTime) && endTime < Date.now()) return false;
+  }
+  return true;
+}
+
 const initialState = {
+  serverFeatures: [],
   activePlanId: null,
   activePlanIds: [],
   promoMessage: "",
@@ -85,6 +124,17 @@ function readInitialState() {
       return { ...initialState, authenticated: isAuthenticated };
     }
     const parsed = JSON.parse(stored);
+    // Persisted profile/bookings/test history belong to one user. If a different
+    // user is signed in now, never show the previous user's data.
+    const currentUser = useAuthStore.getState().user;
+    const currentOwnerId = currentUser?.id ?? currentUser?._id;
+    if (
+      currentOwnerId == null ||
+      parsed.ownerId == null ||
+      String(parsed.ownerId) !== String(currentOwnerId)
+    ) {
+      return { ...initialState, authenticated: isAuthenticated };
+    }
     const migratedPlanIds = Array.isArray(parsed.activePlanIds)
       ? parsed.activePlanIds
       : parsed.activePlanId
@@ -137,11 +187,7 @@ function formatDateLabel(value) {
     return String(value);
   }
 
-  return date.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  return formatSharedDate(date);
 }
 
 function formatValidityDays(value) {
@@ -190,7 +236,7 @@ function mapSubscriptionItem(item, index = 0) {
   const planName = item?.planName || item?.plan_name || item?.plan?.name || item?.plan || `Subscription ${index + 1}`;
   const expiryDate = formatDateLabel(item?.expiryDate || item?.expiry_date || item?.endDate || item?.validUntil || item?.renewalDate);
   const transactionId = item?.transactionId || item?.transaction_id || item?.transaction || item?.reference || "";
-  const price = item?.price != null ? `Rs ${item.price}` : item?.amount != null ? `Rs ${item.amount}` : "";
+  const price = item?.price != null ? formatCurrency(item.price) || `Rs ${item.price}` : item?.amount != null ? formatCurrency(item.amount) || `Rs ${item.amount}` : "";
 
   return {
     id: String(item?.id ?? `subscription-${index}`),
@@ -287,13 +333,19 @@ function normalizeSubscriptionItems(items = []) {
       amount,
       validity: validity || mapped.validity,
       expiryDate: expiryDate || mapped.expiryDate,
-      price: amount !== "" ? `Rs ${amount}` : mapped.price,
+      price: amount !== "" ? formatCurrency(amount) || `Rs ${amount}` : mapped.price,
     };
   });
 }
 
 export function AppStateProvider({ children }) {
   const [state, setState] = useState(readInitialState);
+  const ownerIdRef = useRef(
+    (() => {
+      const u = useAuthStore.getState().user;
+      return u?.id ?? u?._id ?? null;
+    })()
+  );
   const accessToken = useAuthStore((current) => current.accessToken);
 
   const refreshNotifications = useCallback(async () => {
@@ -351,12 +403,36 @@ export function AppStateProvider({ children }) {
 
     let active = true;
 
+    // Safety net: the access token must belong to the signed-in user. If it was issued for a
+    // different account, end the session instead of showing that account's data.
+    try {
+      const store = useAuthStore.getState();
+      const payload = JSON.parse(atob(String(store.accessToken).split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+      const storedId = store.user?.id ?? store.user?._id;
+      if (payload?.id != null && storedId != null && String(payload.id) !== String(storedId)) {
+        store.logout();
+        window.location.replace("/auth-entry");
+        return undefined;
+      }
+    } catch {
+      // token not decodable here; the API will reject it if invalid
+    }
+
+    // A different user signed in without a page reload: drop the previous user's
+    // in-memory profile, test history and bookings before loading the new user's.
+    const signedInUser = useAuthStore.getState().user;
+    const signedInId = signedInUser?.id ?? signedInUser?._id ?? null;
+    if (ownerIdRef.current != null && signedInId != null && String(ownerIdRef.current) !== String(signedInId)) {
+      setState(() => ({ ...initialState, authenticated: true }));
+    }
+    ownerIdRef.current = signedInId;
+
     async function loadProfileSections() {
       try {
         const [testResponse, bookingResponse, subscriptionResponse] = await Promise.all([
           getTestHistory().catch(() => null),
           getMentorBookings().catch(() => null),
-          getSubscriptions().catch(() => null),
+          getSubscriptions({ force: true }).catch(() => null),
         ]);
 
         if (!active) {
@@ -380,7 +456,7 @@ export function AppStateProvider({ children }) {
         });
 
         const activeSubscriptions = userSubscriptions.filter(
-          (item) => String(item?.status || "").toLowerCase() === "active"
+          (item) => isActiveSubscription(item)
         );
 
         const freshActivePlanIds = Array.from(
@@ -401,6 +477,7 @@ export function AppStateProvider({ children }) {
           subscriptionRecords: normalizeSubscriptionItems(userSubscriptions),
           activePlanIds: freshActivePlanIds,
           activePlanId: freshActivePlanIds[0] || null,
+          serverFeatures: deriveFeaturesFromSubscriptions(activeSubscriptions),
         }));
       } catch {
         if (!active) {
@@ -414,6 +491,7 @@ export function AppStateProvider({ children }) {
           subscriptionRecords: initialState.subscriptionRecords,
           activePlanIds: [],
           activePlanId: null,
+          serverFeatures: [],
         }));
       }
     }
@@ -427,7 +505,13 @@ export function AppStateProvider({ children }) {
   useEffect(() => {
     if (state.authenticated) {
       const { profileEditRequestKey, ...persistedState } = state;
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(persistedState));
+      const owner = useAuthStore.getState().user;
+      persistedState.ownerId = owner?.id ?? owner?._id ?? null;
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(persistedState));
+      } catch {
+        // Storage can be unavailable (private mode) or full; the app keeps working in memory.
+      }
     } else if (typeof window !== "undefined") {
       try {
         window.localStorage.removeItem(STORAGE_KEY);
@@ -458,9 +542,10 @@ export function AppStateProvider({ children }) {
       : activePlanId
         ? [activePlanId]
         : [];
-    const unlockedFeatures = new Set(
-      activePlanIds.flatMap((planId) => planFeatures[planId] || [])
-    );
+    const unlockedFeatures = new Set([
+      ...activePlanIds.flatMap((planId) => planFeatures[planId] || []),
+      ...(state.serverFeatures || []),
+    ]);
 
     return {
       ...state,
@@ -517,10 +602,10 @@ export function AppStateProvider({ children }) {
       async refreshUserData() {
         try {
           const [testResponse, bookingResponse, subscriptionResponse, dashboardResponse] = await Promise.all([
-            getTestHistory().catch(() => null),
-            getMentorBookings().catch(() => null),
-            getSubscriptions().catch(() => null),
-            getDashboard().catch(() => null),
+            getTestHistory({ force: true }).catch(() => null),
+            getMentorBookings({ force: true }).catch(() => null),
+            getSubscriptions({ force: true }).catch(() => null),
+            getDashboard({ force: true }).catch(() => null),
           ]);
 
           const testItems = extractResponseItems(testResponse);
@@ -539,7 +624,7 @@ export function AppStateProvider({ children }) {
           });
 
           const activeSubscriptions = userSubscriptions.filter(
-            (item) => String(item?.status || "").toLowerCase() === "active"
+            (item) => isActiveSubscription(item)
           );
 
           const freshActivePlanIds = Array.from(
@@ -561,6 +646,7 @@ export function AppStateProvider({ children }) {
             subscriptionRecords: normalizeSubscriptionItems(userSubscriptions),
             activePlanIds: freshActivePlanIds,
             activePlanId: freshActivePlanIds[0] || null,
+            serverFeatures: deriveFeaturesFromSubscriptions(activeSubscriptions),
           }));
         } catch (err) {
           console.warn("refreshUserData error:", err);
@@ -628,7 +714,9 @@ export function AppStateProvider({ children }) {
             : current.activePlanId
               ? [current.activePlanId]
               : [];
-          const hasUnlockedFeature = currentPlanIds.some((planId) => planFeatures[planId]?.includes(feature));
+          const hasUnlockedFeature =
+            currentPlanIds.some((planId) => planFeatures[planId]?.includes(feature)) ||
+            (current.serverFeatures || []).includes(feature);
 
           if (hasUnlockedFeature) {
             return current;
@@ -663,29 +751,7 @@ export function AppStateProvider({ children }) {
           preferences: current.preferences,
         }));
       },
-      subscriptionRecords: state.subscriptionRecords?.length
-        ? state.subscriptionRecords
-        : activePlanIds.map((planId) => ({
-            id: planId,
-            planName:
-              planId === "psychometric"
-                ? "Psychometric Test"
-                : planId === "premium"
-                  ? "Psychometric + Counselling"
-                  : planId === "infocentre"
-                    ? "Infocentre Access"
-                    : "Study Abroad Access",
-            price:
-              planId === "psychometric"
-                ? "Rs 1,500"
-                : planId === "premium"
-                  ? "Rs 3,000"
-                  : planId === "infocentre"
-                    ? "Rs 5,000"
-                    : "Rs 2,500",
-            expiryDate: "10 Apr 2027",
-            transactionId: `TXN-${planId.toUpperCase()}-2401`,
-          })),
+      subscriptionRecords: state.subscriptionRecords || [],
       dashboardData: state.dashboardData,
       profileIncomplete: state.profileIncomplete,
     };

@@ -43,7 +43,6 @@ import {
   TOTAL_ASSESSMENT_QUESTIONS,
   getDomainMeta,
 } from "../data/assessmentConstants";
-import { FALLBACK_SECTIONS } from "../data/fallbackQuestions";
 
 const APTITUDE_TIME_LIMIT_SECONDS = 30 * 60;
 
@@ -63,6 +62,7 @@ export default function AssessmentTestPage() {
   // Map of answers: { [questionId]: { likertValue?: number, selectedOptionId?: string|number, optionKey?: string } }
   const [answers, setAnswers] = useState({});
   const [saveStatus, setSaveStatus] = useState("saved"); // 'saving' | 'saved' | 'error'
+  const [loadError, setLoadError] = useState("");
 
   // Submission state & modal
   const [isSubmitModalVisible, setIsSubmitModalVisible] = useState(false);
@@ -74,6 +74,7 @@ export default function AssessmentTestPage() {
 
   const pendingSavesRef = useRef({});
   const saveTimeoutRef = useRef(null);
+  const flushRef = useRef(null);
   const aptitudeTimerKey = `assessment:${attemptId}:aptitude-started-at`;
 
   useEffect(() => {
@@ -83,6 +84,7 @@ export default function AssessmentTestPage() {
 
   async function loadTestQuestions() {
     setLoading(true);
+    setLoadError("");
     try {
       let loadedSections = [];
       let initialAnswers = {};
@@ -94,8 +96,7 @@ export default function AssessmentTestPage() {
       } else if (Array.isArray(data) && data.length > 0) {
         loadedSections = data;
       } else {
-        // Use comprehensive fallback dataset
-        loadedSections = FALLBACK_SECTIONS;
+        throw new Error("No questions are available for this assessment attempt.");
       }
 
       // Merge pre-saved answers if any
@@ -133,7 +134,7 @@ export default function AssessmentTestPage() {
           okButtonProps: { style: { background: "#9a2119", borderColor: "#9a2119" } },
           onOk: () => {
             if (data?.reason === "ALREADY_COMPLETED") {
-              navigate(`/student/assessment/report/${attemptId}`);
+              navigate(`/app/assessment/attempt/${attemptId}/result`, { replace: true });
             } else {
               navigate("/app/subscription");
             }
@@ -142,7 +143,8 @@ export default function AssessmentTestPage() {
         });
         return;
       }
-      setSections(FALLBACK_SECTIONS);
+      setSections([]);
+      setLoadError(data?.message || err?.message || "Could not load the assessment questions.");
     } finally {
       setLoading(false);
     }
@@ -243,20 +245,79 @@ export default function AssessmentTestPage() {
       clearTimeout(saveTimeoutRef.current);
     }
 
-    saveTimeoutRef.current = setTimeout(async () => {
-      try {
-        await saveAttemptAnswer(attemptId, {
-          questionId,
-          likertValue,
-          selectedOptionId,
-          optionKey,
-        });
-        setSaveStatus("saved");
-      } catch (e) {
-        console.warn("Auto-save sync:", e?.message);
-        setSaveStatus("saved"); // keep optimistic state
-      }
+    saveTimeoutRef.current = setTimeout(() => {
+      flushPendingSaves();
     }, 300);
+  }
+
+  // Save every queued answer (not just the last clicked one). Failed entries stay queued.
+  async function flushPendingSaves() {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+    const entries = Object.values(pendingSavesRef.current);
+    if (entries.length === 0) return true;
+    pendingSavesRef.current = {};
+    setSaveStatus("saving");
+    try {
+      if (entries.length === 1) {
+        await saveAttemptAnswer(attemptId, entries[0]);
+      } else {
+        await saveBatchAttemptAnswers(
+          attemptId,
+          entries.map((entry) => ({
+            questionId: entry.questionId,
+            ...(entry.likertValue !== undefined && entry.likertValue !== null ? { likertValue: entry.likertValue } : {}),
+            ...(entry.selectedOptionId !== undefined && entry.selectedOptionId !== null ? { selectedOptionId: entry.selectedOptionId } : {}),
+            ...(entry.optionKey !== undefined && entry.optionKey !== null ? { optionKey: entry.optionKey } : {}),
+          }))
+        );
+      }
+      if (Object.keys(pendingSavesRef.current).length === 0) setSaveStatus("saved");
+      return true;
+    } catch (e) {
+      console.warn("Auto-save failed:", e?.message);
+      // Re-queue (newer answers for the same question win)
+      entries.forEach((entry) => {
+        if (!pendingSavesRef.current[entry.questionId]) pendingSavesRef.current[entry.questionId] = entry;
+      });
+      setSaveStatus("error");
+      return false;
+    }
+  }
+  flushRef.current = flushPendingSaves;
+
+  // Flush pending answers when leaving the page / closing the tab
+  useEffect(() => {
+    const handleBeforeUnload = (event) => {
+      if (Object.keys(pendingSavesRef.current).length > 0) {
+        flushRef.current?.();
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      if (Object.keys(pendingSavesRef.current).length > 0) flushRef.current?.();
+    };
+  }, []);
+
+  async function handleExitTest() {
+    const ok = await flushPendingSaves();
+    if (ok) {
+      navigate("/app/assessment");
+      return;
+    }
+    Modal.confirm({
+      title: "Some answers could not be saved",
+      content: "Your latest answers failed to save. If you exit now they may be lost. Exit anyway?",
+      okText: "Exit anyway",
+      cancelText: "Stay",
+      okButtonProps: { style: { background: "#9a2119", borderColor: "#9a2119" } },
+      onOk: () => navigate("/app/assessment"),
+    });
   }
 
   // Section switch with background batch-save
@@ -272,9 +333,18 @@ export default function AssessmentTestPage() {
     }));
 
     if (batchList.length > 0) {
-      saveBatchAttemptAnswers(attemptId, batchList).catch((err) =>
-        console.warn("Batch save sync:", err?.message)
-      );
+      const included = { ...pendingSavesRef.current };
+      saveBatchAttemptAnswers(attemptId, batchList)
+        .then(() => {
+          Object.keys(included).forEach((key) => {
+            if (pendingSavesRef.current[key] === included[key]) delete pendingSavesRef.current[key];
+          });
+          if (Object.keys(pendingSavesRef.current).length === 0) setSaveStatus("saved");
+        })
+        .catch((err) => {
+          console.warn("Batch save sync:", err?.message);
+          setSaveStatus("error");
+        });
     }
 
     setCurrentSectionIndex(newIndex);
@@ -285,6 +355,8 @@ export default function AssessmentTestPage() {
   const unansweredQuestions = useMemo(() => {
     const list = [];
     sections.forEach((sec, sIdx) => {
+      // Aptitude questions are optional (skipped ones score 0); every other module is required.
+      if (isAptitudeSection(sec, sIdx)) return;
       const qList = Array.isArray(sec.questions) ? sec.questions : [];
       qList.forEach((q, qIdx) => {
         const isAnswered =
@@ -319,7 +391,13 @@ export default function AssessmentTestPage() {
         ...(ans.selectedOptionId !== undefined && ans.selectedOptionId !== null ? { selectedOptionId: ans.selectedOptionId } : {}),
         ...(ans.optionKey !== undefined && ans.optionKey !== null ? { optionKey: ans.optionKey } : {}),
       }));
-      await saveBatchAttemptAnswers(attemptId, batchList).catch(() => {});
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+      await saveBatchAttemptAnswers(attemptId, batchList);
+      pendingSavesRef.current = {};
+      setSaveStatus("saved");
 
       setSubmitStepText("Evaluating Personal Profiling & Career Planning Track...");
       await new Promise((r) => setTimeout(r, 400));
@@ -334,12 +412,14 @@ export default function AssessmentTestPage() {
       await new Promise((r) => setTimeout(r, 400));
 
       message.success("Assessment submitted successfully! A copy of your report link has been sent to your registered email.");
-      navigate(`/student/assessment/report/${attemptId}`);
+      navigate(`/app/assessment/attempt/${attemptId}/result`, { replace: true });
     } catch (err) {
-      console.warn("Submit test API note:", err?.message);
-      // Fallback: Proceed to report screen
-      message.success("Assessment submitted successfully! A copy of your report link has been sent to your registered email.");
-      navigate(`/student/assessment/report/${attemptId}`);
+      console.warn("Submit test failed:", err?.message);
+      // Stay on the test; only a successful submit navigates to the report.
+      message.error(
+        err?.response?.data?.message || err?.message || "Could not submit your assessment. Please try again."
+      );
+      setIsSubmitModalVisible(true);
     } finally {
       setSubmitting(false);
     }
@@ -353,6 +433,26 @@ export default function AssessmentTestPage() {
           <h2 className="mt-4 text-xl font-bold text-slate-800">Loading Assessment Engine...</h2>
           <p className="mt-1 text-sm text-slate-700">Preparing questions and pre-saved responses</p>
         </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#faf6f3] p-4">
+        <Result
+          status="warning"
+          title="Could not load the assessment"
+          subTitle={loadError}
+          extra={[
+            <Button key="retry" type="primary" onClick={loadTestQuestions} style={{ background: "#9a2119", borderColor: "#9a2119" }}>
+              Retry
+            </Button>,
+            <Button key="back" onClick={() => navigate("/app/assessment")}>
+              Back to Assessment
+            </Button>,
+          ]}
+        />
       </div>
     );
   }
@@ -383,15 +483,15 @@ const aptitudeTimerLabel = `${String(Math.floor(aptitudeTimeLeft / 60)).padStart
   return (
     <div className="assessment-test min-h-screen text-slate-800 antialiased">
       {/* Sticky Top Header with Progress & Auto-save status */}
-      <div className="sticky top-16 z-30 -mx-9 border-b backdrop-blur-md shadow-sm">
-        <div className="w-full px-8 py-2">
-          <div className="flex flex-nowrap items-center justify-between gap-3">
+      <div className="sticky top-16 z-30 -mx-3 border-b backdrop-blur-md shadow-sm sm:-mx-6 lg:-mx-9">
+        <div className="w-full px-3 py-2 sm:px-6 lg:px-8">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 sm:flex-nowrap">
             {/* Left: Exit button */}
             <div className="flex items-center gap-3">
               <Button
                 size="small"
                 icon={<ArrowLeftOutlined />}
-                onClick={() => navigate("/app/assessment")}
+                onClick={handleExitTest}
                 className="rounded-lg text-xs font-semibold"
               >
                 Exit Test
@@ -400,7 +500,7 @@ const aptitudeTimerLabel = `${String(Math.floor(aptitudeTimeLeft / 60)).padStart
             </div>
 
             {/* Middle: Section Pills Bar */}
-            <div className="flex items-center justify-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            <div className="order-last flex w-full min-w-0 items-center gap-2 overflow-x-auto pb-1 scrollbar-none sm:order-none sm:w-auto sm:justify-center">
               {sections.map((sec, idx) => {
                 const stat = sectionStats[idx] || { answered: 0, total: 0, isComplete: false };
                 const isCurrent = idx === currentSectionIndex;
@@ -437,13 +537,23 @@ const aptitudeTimerLabel = `${String(Math.floor(aptitudeTimeLeft / 60)).padStart
             </div>
 
             {/* Right: Auto-Save Badge & Total Progress */}
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
               <div className="flex items-center gap-1.5 text-xs font-medium text-slate-700">
                 {saveStatus === "saving" ? (
                   <>
                     <SyncOutlined spin className="text-amber-500" />
                     <span>Saving...</span>
                   </>
+                ) : saveStatus === "error" ? (
+                  <button
+                    type="button"
+                    onClick={() => flushPendingSaves()}
+                    className="flex items-center gap-1.5 border-0 bg-transparent p-0 text-xs font-medium text-red-600"
+                    title="Click to retry saving"
+                  >
+                    <ExclamationCircleOutlined />
+                    <span>Not saved - retry</span>
+                  </button>
                 ) : (
                   <>
                     <CheckCircleFilled className="text-emerald-500" />

@@ -46,9 +46,11 @@ import {
 } from "../../portal/components/portalPageShared";
 import { checkModuleAccess, startPreview, } from "../../../api/moduleAccessApi";
 import { getDashboard } from "../../../api/dashboardApi";
-import { getInstitutes } from "../../../api/instituteApi";
+import { getInstitutes, getInstituteFilters } from "../../../api/instituteApi";
 import { useScrollToTopOnChange } from "../../../shared/useScrollToTopOnChange";
+import { sanitizeHtml } from "../../../utils/sanitizeHtml";
 
+import { formatDate as formatSharedDate } from "../../../utils/format";
 const streamIcons = {
   Science: <ExperimentOutlined />,
   Commerce: <CreditCardOutlined />,
@@ -682,14 +684,26 @@ function InstituteFilterGroup({ scope, region, badge, emptyText, showLocationFil
   const [pagination, setPagination] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [otherStates, setOtherStates] = useState(null);
   const requestIdRef = useRef(0);
   const pageSize = 12;
+
+  // Start again from page 1 (and drop the state) whenever the scope or region
+  // changes, so a reused component never asks for a page that no longer exists.
+  const scopeKey = [scope.categoryId, scope.secondcategoryId, scope.subcategoryId, region].join("|");
+  const [prevScopeKey, setPrevScopeKey] = useState(scopeKey);
+  if (prevScopeKey !== scopeKey) {
+    setPrevScopeKey(scopeKey);
+    setPage(1);
+    setState("");
+  }
 
   const india = Country.getCountryByCode("IN");
   const states = State.getStatesOfCountry(india.isoCode);
 
   // Unique states pulled from the API data for institutes outside India
   const otherCountryStates = useMemo(() => {
+    if (otherStates) return otherStates;
     const seen = new Set();
     const result = [];
     institutes.forEach((i) => {
@@ -699,7 +713,30 @@ function InstituteFilterGroup({ scope, region, badge, emptyText, showLocationFil
       result.push(i.state);
     });
     return result;
-  }, [institutes]);
+  }, [institutes, otherStates]);
+
+  // State options for institutes outside India come from the API, not the current page
+  useEffect(() => {
+    if (!showLocationFilter || country !== "Other") {
+      setOtherStates(null);
+      return undefined;
+    }
+    let active = true;
+    getInstituteFilters({
+      excludeCountry: "india",
+      categoryId: scope.categoryId,
+      secondcategoryId: scope.secondcategoryId,
+      subcategoryId: scope.subcategoryId,
+      type: filter === "govt" ? "Govt" : filter === "private" ? "Pvt" : "",
+    })
+      .then((result) => {
+        if (active) setOtherStates(result.states.map((s) => s.state));
+      })
+      .catch(() => {
+        if (active) setOtherStates(null);
+      });
+    return () => { active = false; };
+  }, [scope.categoryId, scope.secondcategoryId, scope.subcategoryId, country, filter, showLocationFilter]);
 
   useEffect(() => {
     const requestId = ++requestIdRef.current;
@@ -711,6 +748,11 @@ function InstituteFilterGroup({ scope, region, badge, emptyText, showLocationFil
       page,
       limit: pageSize,
       region,
+      ...(showLocationFilter
+        ? country === "India"
+          ? { country: "india" }
+          : { excludeCountry: "india" }
+        : {}),
       state: state || "",
       type: filter === "govt" ? "Govt" : filter === "private" ? "Pvt" : "",
     })
@@ -734,14 +776,7 @@ function InstituteFilterGroup({ scope, region, badge, emptyText, showLocationFil
   const totalItems = Number(pagination?.total ?? pagination?.totalCount ?? 0);
   const totalPages = Math.max(1, Number(pagination?.totalPages || Math.ceil(totalItems / pageSize) || 1));
 
-  const filtered = institutes.filter((i) => {
-    if (showLocationFilter) {
-      const isIndia = normalizeCountryName(i.country) === "india";
-      const matchesCountry = country === "India" ? isIndia : !isIndia;
-      if (!matchesCountry) return false;
-    }
-    return true;
-  });
+  const filtered = institutes;
 
   return (
     <div>
@@ -829,11 +864,7 @@ function InstituteCard({ inst, badge }) {
   const url = inst?.raw?.url || null;
   const admissionProcess = inst?.raw?.admission_process || null;
   const tentativeDate = inst?.raw?.tentative_date
-    ? new Date(inst.raw.tentative_date).toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    })
+    ? formatSharedDate(new Date(inst.raw.tentative_date))
     : null;
   const stateName = inst?.state || inst?.raw?.state || "";
   const isGovt = String(inst?.type || inst?.raw?.institute_type || "").toLowerCase().includes("gov");
@@ -1133,27 +1164,31 @@ useEffect(() => {
     loadStreams();
     return () => { active = false; };
   }, []);
+  // One interval for the whole countdown (not re-created every second); the
+  // state updater stays pure and the expiry side effects run in their own effect.
+  const previewRunning = previewRemaining > 0;
+  const previewWasRunningRef = useRef(false);
   useEffect(() => {
-    if (!previewRemaining) return;
-
+    if (!previewRunning) return undefined;
     const timer = setInterval(() => {
-      setPreviewRemaining((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          setPreviewExpired(true);
-          setUnlockModalItem({
-            title: "Preview Expired",
-            description:
-              "Your free Career Archive access has already been used. Subscribe to unlock .",
-          });
-          return 0;
-        }
-
-        return prev - 1;
-      });
+      setPreviewRemaining((prev) => Math.max(0, prev - 1));
     }, 1000);
-
     return () => clearInterval(timer);
+  }, [previewRunning]);
+
+  useEffect(() => {
+    if (previewRemaining > 0) {
+      previewWasRunningRef.current = true;
+      return;
+    }
+    if (!previewWasRunningRef.current) return;
+    previewWasRunningRef.current = false;
+    setPreviewExpired(true);
+    setUnlockModalItem({
+      title: "Preview Expired",
+      description:
+        "Your free Career Archive access has already been used. Subscribe to unlock .",
+    });
   }, [previewRemaining]);
 
   useEffect(() => {
@@ -1172,7 +1207,7 @@ useEffect(() => {
           }
         }
       } catch (err) {
-        console.log(err);
+        // access check failed; keep default state
       }
     }
 
@@ -1947,7 +1982,7 @@ useEffect(() => {
                                        prose-td:border prose-td:border-line prose-td:p-2
                                        prose-th:border prose-th:border-line prose-th:p-2
                                        prose-blockquote:border-l-brand"
-                            dangerouslySetInnerHTML={{ __html: item.descriptionHtml || item.description || "" }}
+                            dangerouslySetInnerHTML={{ __html: sanitizeHtml(item.descriptionHtml || item.description || "") }}
                           />
                         ) : null}
                       </div>
@@ -2096,7 +2131,7 @@ className="inline-flex h-10 w-10 items-center justify-center rounded-full border
                                    prose-td:border prose-td:border-line prose-td:p-2
                                    prose-th:border prose-th:border-line prose-th:p-2
                                    prose-blockquote:border-l-brand"
-                        dangerouslySetInnerHTML={{ __html: detail.specializationHtml }}
+                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(detail.specializationHtml) }}
                       />
                     ) : (
                       <p className="m-0 text-sm text-gray-400">Not available.</p>
@@ -2121,7 +2156,7 @@ className="inline-flex h-10 w-10 items-center justify-center rounded-full border
                                    prose-td:border prose-td:border-line prose-td:p-2
                                    prose-th:border prose-th:border-line prose-th:p-2
                                    prose-blockquote:border-l-brand"
-                        dangerouslySetInnerHTML={{ __html: detail.importantFactorHtml }}
+                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(detail.importantFactorHtml) }}
                       />
                     ) : (
                       <p className="m-0 text-sm text-gray-400">Not available.</p>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Button, Tabs,Select } from "antd";
 import {
   LockOutlined,
@@ -21,6 +21,7 @@ import { UnlockRedirectModal, usePortalNavigation } from "../../portal/component
 import { checkModuleAccess, startPreview } from "../../../api/moduleAccessApi";
 import { useBrowserStepHistory } from "../../../shared/useBrowserStepHistory";
 import { useScrollToTopOnChange } from "../../../shared/useScrollToTopOnChange";
+import { sanitizeHtml } from "../../../utils/sanitizeHtml";
 
 function scrollToSection(id) {
   const el = document.getElementById(id);
@@ -134,6 +135,7 @@ useEffect(() => {
     };
   }, [SCHOLARSHIP_MODULE_ID, accessStatus]);
 
+  const deepLinkHandledRef = useRef("");
   // Auto-open scholarship detail when navigated from Global Search or URL params
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
@@ -145,25 +147,26 @@ useEffect(() => {
 
     if (!scholarshipId && !scholarshipName) return;
 
-    if (items.length > 0) {
-      const found = items.find(
-        (item) =>
-          (scholarshipId && String(item.id) === String(scholarshipId)) ||
-          (scholarshipName &&
-            (item.name?.toLowerCase() === scholarshipName.toLowerCase() ||
-              item.title?.toLowerCase() === scholarshipName.toLowerCase()))
-      );
+    if (items.length > 0 && !loading) {
+      const handleKey = `${scholarshipId || ""}|${scholarshipName || ""}`;
+      if (deepLinkHandledRef.current === handleKey) return;
+      deepLinkHandledRef.current = handleKey;
 
-      if (found) {
-        setSelectedItem(found);
-      } else if (scholarshipName) {
-        const partialMatch = items.find((item) =>
-          item.name?.toLowerCase().includes(scholarshipName.toLowerCase())
+      let found = scholarshipId
+        ? items.find((item) => String(item.id) === String(scholarshipId))
+        : null;
+      if (!found && scholarshipName) {
+        const target = String(scholarshipName).trim().toLowerCase();
+        const exact = items.filter(
+          (item) =>
+            String(item.name || "").trim().toLowerCase() === target ||
+            String(item.title || "").trim().toLowerCase() === target
         );
-        if (partialMatch) setSelectedItem(partialMatch);
+        if (exact.length === 1) found = exact[0];
       }
+      if (found) setSelectedItem(found);
     }
-  }, [items, location.search, location.state]);
+  }, [items, loading, location.search, location.state]);
 
   useEffect(() => {
   if (!previewSessionId || previewExpired) return;
@@ -210,7 +213,14 @@ useEffect(() => {
 
 
   const typeOptions = useMemo(
-  () => [...new Set(items.map((i) => i.tag).filter(Boolean))],
+  () => [
+    ...new Map(
+      items
+        .map((i) => String(i.tag || "").trim())
+        .filter(Boolean)
+        .map((tag) => [tag.toLowerCase(), tag])
+    ).values(),
+  ],
   [items]
 );
 
@@ -232,13 +242,13 @@ const filtered = useMemo(
 
         const matchesType =
           !type ||
-          item.tag === type;
+          String(item.tag || "").trim().toLowerCase() === String(type).trim().toLowerCase();
 
         const matchesEligibility =
           !eligibility ||
-          String(item.eligibility || "")
-            .toLowerCase()
-            .includes(eligibility.toLowerCase());
+          new RegExp(
+            `(^|[^a-z0-9])${eligibility.toLowerCase()}($|[^a-z0-9])`
+          ).test(String(item.eligibility || "").toLowerCase());
 
         return (
           matchesStatus &&
@@ -434,7 +444,7 @@ const filtered = useMemo(
                                    prose-td:border prose-td:border-line prose-td:p-2
                                    prose-th:border prose-th:border-line prose-th:p-2
                                    prose-blockquote:border-l-brand prose-blockquote:text-ink"
-                        dangerouslySetInnerHTML={{ __html: section.description || "" }}
+                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(section.description || "") }}
                       />
                     </div>
                   ))}
@@ -588,7 +598,9 @@ const filtered = useMemo(
         value: String(item.id),
         label: item.title || item.name,
       }))}
-      style={{ minWidth: 0, width: "100%" }}
+      popupMatchSelectWidth={false}
+      styles={{ popup: { root: { minWidth: 280, maxWidth: "90vw" } } }}
+      style={{ minWidth: 200, width: "100%" }}
       className="pill-select"
     />
   </div>
@@ -606,7 +618,9 @@ const filtered = useMemo(
         value: option,
         label: option,
       }))}
-      style={{ minWidth: 0, width: "100%" }}
+      popupMatchSelectWidth={false}
+      styles={{ popup: { root: { minWidth: 220, maxWidth: "90vw" } } }}
+      style={{ minWidth: 160, width: "100%" }}
       className="pill-select"
     />
   </div>
@@ -624,7 +638,9 @@ const filtered = useMemo(
         value: option,
         label: option,
       }))}
-      style={{ minWidth: 0, width: "100%" }}
+      popupMatchSelectWidth={false}
+      styles={{ popup: { root: { minWidth: 240, maxWidth: "90vw" } } }}
+      style={{ minWidth: 180, width: "100%" }}
       className="pill-select"
     />
   </div>

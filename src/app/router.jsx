@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import RootProviders from "./providers/RootProviders";
-import { PublicOnly, RequireAuth } from "./routes/guards";
+import { PublicOnly, RequireAuth, RequireOtpContext, RequireSignupToken } from "./routes/guards";
+import { NotFoundPage, RedirectTo, RouteErrorPage } from "./routes/RouteFallbacks";
 import WebsiteLayout from "../shared/layout/WebsiteLayout";
 
 import SplashPage from "../features/auth/pages/SplashPage";
@@ -38,6 +39,7 @@ import AboutPage from "../features/about/pages/AboutPage";
 export const router = createBrowserRouter([
   {
     element: <RootProviders />,
+    errorElement: <RouteErrorPage />,
     children: [
       { path: "/", element: <Navigate to="/auth-entry" replace /> },
       { path: "/splash", element: <SplashPage /> },
@@ -48,16 +50,28 @@ export const router = createBrowserRouter([
           { path: "/onboarding", element: <OnboardingPage /> },
           { path: "/login", element: <LoginPage /> },
           { path: "/signup", element: <SignupPage /> },
-          { path: "/otp-verify", element: <OtpVerifyPage /> },
+          {
+            element: <RequireOtpContext />,
+            children: [{ path: "/otp-verify", element: <OtpVerifyPage /> }],
+          },
           { path: "/forgot-password", element: <ForgotPasswordPage /> },
-          { path: "/reset-password", element: <ResetPasswordPage /> },
-          { path: "/reset-password/:token", element: <ResetPasswordPage /> },
         ],
       },
-      { path: "/profile-setup", element: <ProfileSetupPage /> },
-      { path: "/promo", element: <PromoPage /> },
-      { path: "/checkout", element: <CheckoutPage /> },
-      { path: "/payment-success", element: <PaymentSuccessPage /> },
+      // Reset links are opened from email, also by users who are already logged in
+      { path: "/reset-password", element: <ResetPasswordPage /> },
+      { path: "/reset-password/:token", element: <ResetPasswordPage /> },
+      {
+        element: <RequireSignupToken />,
+        children: [{ path: "/profile-setup", element: <ProfileSetupPage /> }],
+      },
+      {
+        element: <RequireAuth />,
+        children: [
+          { path: "/promo", element: <PromoPage /> },
+          { path: "/checkout", element: <CheckoutPage /> },
+          { path: "/payment-success", element: <PaymentSuccessPage /> },
+        ],
+      },
       { path: "/plans", element: <Navigate to="/app/subscription" replace /> },
       { path: "/pricing", element: <Navigate to="/app/subscription" replace /> },
       { path: "/assessment", element: <Navigate to="/app/assessment" replace /> },
@@ -68,11 +82,12 @@ export const router = createBrowserRouter([
           {
             element: <WebsiteLayout />,
             children: [
-              { path: "/student/assessment/report/:attemptId", element: <AssessmentReportPage /> },
-              { path: "/assessment/report/:attemptId", element: <AssessmentReportPage /> },
-              { path: "/assessment/attempt/:attemptId/result", element: <AssessmentReportPage /> },
-              { path: "/assessment/result/:attemptId", element: <AssessmentReportPage /> },
-              { path: "/assessment/attempt/:attemptId", element: <AssessmentTestPage /> },
+              // Legacy aliases redirect to the canonical /app/assessment routes
+              { path: "/student/assessment/report/:attemptId", element: <RedirectTo to="/app/assessment/attempt/:attemptId/result" /> },
+              { path: "/assessment/report/:attemptId", element: <RedirectTo to="/app/assessment/attempt/:attemptId/result" /> },
+              { path: "/assessment/attempt/:attemptId/result", element: <RedirectTo to="/app/assessment/attempt/:attemptId/result" /> },
+              { path: "/assessment/result/:attemptId", element: <RedirectTo to="/app/assessment/attempt/:attemptId/result" /> },
+              { path: "/assessment/attempt/:attemptId", element: <RedirectTo to="/app/assessment/attempt/:attemptId" /> },
             ],
           },
           {
@@ -84,9 +99,9 @@ export const router = createBrowserRouter([
               { path: "assessment", element: <AssessmentLandingPage /> },
               { path: "assessment/attempt/:attemptId", element: <AssessmentTestPage /> },
               { path: "assessment/attempt/:attemptId/result", element: <AssessmentReportPage /> },
-              { path: "assessment/result/:attemptId", element: <AssessmentReportPage /> },
-              { path: "assessment/report/:attemptId", element: <AssessmentReportPage /> },
-              { path: "student/assessment/report/:attemptId", element: <AssessmentReportPage /> },
+              { path: "assessment/result/:attemptId", element: <RedirectTo to="/app/assessment/attempt/:attemptId/result" /> },
+              { path: "assessment/report/:attemptId", element: <RedirectTo to="/app/assessment/attempt/:attemptId/result" /> },
+              { path: "student/assessment/report/:attemptId", element: <RedirectTo to="/app/assessment/attempt/:attemptId/result" /> },
               { path: "psychometric-test", element: <Navigate to="/app/assessment" replace /> },
               { path: "library", element: <LibraryPage /> },
               { path: "learn", element: <LearnPage /> },
@@ -116,12 +131,12 @@ export const router = createBrowserRouter([
               { path: "careers/*", element: <Navigate to="/app/library" replace /> },
               { path: "mentors", element: <Navigate to="/app/book-mentor" replace /> },
               { path: "mentors/:id", element: <Navigate to="/app/book-mentor" replace /> },
-              { path: "*", element: <Navigate to="/app/dashboard" replace /> },
+              { path: "*", element: <NotFoundPage /> },
             ],
           },
         ],
       },
-      { path: "*", element: <Navigate to="/app/dashboard" replace /> },
+      { path: "*", element: <NotFoundPage /> },
     ],
   },
 ]);

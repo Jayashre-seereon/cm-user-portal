@@ -1,5 +1,6 @@
 import api from "./axios";
 
+import { formatDate as formatSharedDate } from "../utils/format";
 function buildLocation(city, state) {
   return (
     [city, state].filter(Boolean).join(", ") ||
@@ -29,7 +30,7 @@ function formatDateDDMMYYYY(value) {
     return String(value);
   }
 
-  return parsedDate.toLocaleDateString("en-GB");
+  return formatSharedDate(parsedDate);
 }
 
 function getInstituteWebsite(item = {}) {
@@ -148,6 +149,7 @@ export async function getInstitutes({
   search = "",
   category = "",
   country = "",
+  excludeCountry = "",
   state = "",
   type = "",
 } = {}) {
@@ -168,6 +170,10 @@ export async function getInstitutes({
 
   if (country && country !== "all") {
     params.append("country", country);
+  }
+
+  if (excludeCountry) {
+    params.append("excludeCountry", excludeCountry);
   }
 
   if (state && state !== "all") {
@@ -202,6 +208,43 @@ export async function getInstitutes({
         hasNextPage: false,
         hasPreviousPage: false,
       },
+  };
+}
+
+/*
+| Valid options for every institute filter, given what is already selected.
+| Each list ignores its own selection but applies all the others, so the filters
+| work in any order (category -> state -> type, or type -> state -> category...).
+*/
+export async function getInstituteFilters({
+  category = "",
+  country = "",
+  state = "",
+  type = "",
+  excludeCountry = "",
+  categoryId = "",
+  secondcategoryId = "",
+  subcategoryId = "",
+  streamId = "",
+} = {}) {
+  const params = new URLSearchParams();
+  if (excludeCountry) params.append("excludeCountry", excludeCountry);
+  if (streamId) params.append("streamId", streamId);
+  if (categoryId) params.append("categoryId", categoryId);
+  if (secondcategoryId) params.append("secondcategoryId", secondcategoryId);
+  if (subcategoryId) params.append("subcategoryId", subcategoryId);
+  if (category && category !== "all") params.append("category", category);
+  if (country && country !== "all") params.append("country", country);
+  if (state && state !== "all") params.append("state", state);
+  if (type && type !== "all") params.append("type", type);
+
+  const response = await api.get(`/careerlibrary/institutions/filters?${params.toString()}`);
+  const data = response?.data || {};
+  return {
+    categories: Array.isArray(data.categories) ? data.categories : [],
+    countries: Array.isArray(data.countries) ? data.countries : [],
+    states: Array.isArray(data.states) ? data.states : [],
+    types: Array.isArray(data.types) ? data.types : [],
   };
 }
 

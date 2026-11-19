@@ -1,15 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BellOutlined, CheckCircleOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Alert, Badge, Button, Spin } from "antd";
 import { ModuleScreen, PageHero } from "../../../components/ui";
 import { useAppState } from "../../../state/AppStateContext";
 import { usePortalNavigation } from "../../portal/components/portalPageShared";
+import { markNotificationsRead } from "../../../api/notificationApi";
 
-function NotificationCard({ item }) {
+function NotificationCard({ item, onOpen }) {
   const unread = Boolean(item.unread);
 
   return (
     <div
+      onClick={() => onOpen?.(item)}
       className={`relative overflow-hidden rounded-[24px] border p-5 transition-all ${
         unread ? "border-[#f0c9bf] bg-[#fff8f5] shadow-[0_6px_20px_rgba(154,33,25,0.06)]" : "border-[#ece1db] bg-white"
       }`}
@@ -57,6 +59,26 @@ export default function NotificationsPage() {
   const [items, setItems] = useState(liveNotifications);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+
+  // Notifications seen on this page are marked read when the user leaves it.
+  useEffect(() => {
+    return () => {
+      const ids = (itemsRef.current || []).filter((entry) => entry.unread).map((entry) => entry.id);
+      if (ids.length) {
+        markNotificationsRead(ids);
+        refreshNotificationState().catch(() => {});
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function openNotification(entry) {
+    if (!entry.unread) return;
+    markNotificationsRead([entry.id]);
+    refreshNotificationState().then((data) => setItems(data)).catch(() => {});
+  }
 
   useEffect(() => {
     setItems(liveNotifications);
@@ -124,7 +146,7 @@ export default function NotificationsPage() {
         ) : null}
 
         {items.map((item) => (
-          <NotificationCard key={item.id} item={item} />
+          <NotificationCard key={item.id} item={item} onOpen={openNotification} />
         ))}
       </div>
     </ModuleScreen>

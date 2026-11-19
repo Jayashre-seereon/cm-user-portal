@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getApiErrorMessage, sendSignupOtp } from "../../../api/authApi";
 import { useAuthStore } from "../../../store/authStore";
-import { formatOtpMobile, isValidEmail, isValidMobileNumber, isValidPassword, normalizeMobile } from "../../../utils/auth";
+import { formatOtpMobile, isValidEmail, isValidMobileNumber, isStrongPassword, PASSWORD_POLICY_MESSAGE, normalizeMobile } from "../../../utils/auth";
 import { AuthShell } from "../components/AuthShell";
 import { authPrimaryButtonStyle } from "../components/authShared";
 
@@ -24,14 +24,14 @@ export default function SignupPage() {
   const [status, setStatus] = useState(null);
   const emailError = form.email && !isValidEmail(form.email) ? "Enter a valid email address." : "";
   const mobileError = form.mobile && !isValidMobileNumber(form.mobile) ? "Enter a valid 10 digit mobile number." : "";
-  const passwordError = form.password && !isValidPassword(form.password) ? "Password must be at least 6 characters." : "";
+  const passwordError = form.password && !isStrongPassword(form.password) ? PASSWORD_POLICY_MESSAGE : "";
   const confirmPasswordError =
     form.confirmPassword && form.password !== form.confirmPassword ? "Password and confirm password must match." : "";
   const canSubmit =
     form.name.trim() &&
     isValidEmail(form.email) &&
     isValidMobileNumber(form.mobile) &&
-    isValidPassword(form.password) &&
+    isStrongPassword(form.password) &&
     form.password === form.confirmPassword &&
     form.city.trim() &&
     form.state.trim() &&
@@ -58,8 +58,8 @@ export default function SignupPage() {
       return;
     }
 
-    if (!isValidPassword(form.password)) {
-      setStatus({ type: "error", message: "Password must be at least 6 characters." });
+    if (!isStrongPassword(form.password)) {
+      setStatus({ type: "error", message: PASSWORD_POLICY_MESSAGE });
       return;
     }
 

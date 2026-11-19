@@ -4,6 +4,7 @@ import Logo from "../../../asset/logo_white.png";
 
 export function AuthShell({ children, title, subtitle, backTo }) {
   const [loaded, setLoaded] = useState(false);
+  const [videoFailed, setVideoFailed] = useState(false);
   return (
     <div style={{ minHeight: "100vh", display: "flex", background: "#faf8f7" }}>
       <div
@@ -43,13 +44,14 @@ export function AuthShell({ children, title, subtitle, backTo }) {
           />
         ))}
 
-    <video
+    {!videoFailed && (<video
+  onError={() => setVideoFailed(true)}
   src="https://www.thecareermap.in/banner_videos/1758201830_7C6lAI_Journeyvideo.mp4"
   autoPlay
   loop
   muted
   playsInline
-  preload="auto"
+  preload="metadata"
   onLoadedData={() => setLoaded(true)}   // ✅ detect load
   style={{
     position: "absolute",
@@ -63,7 +65,7 @@ export function AuthShell({ children, title, subtitle, backTo }) {
     transition: "opacity 0.4s ease",
     background: "#000",
   }}
-/>
+/>)}
       </div>
 
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "32px 20px" }}>

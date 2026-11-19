@@ -14,6 +14,7 @@ import {
 import { Button, Card, Collapse, Progress, Radio, Space, Steps, Tag, message } from "antd";
 import { ModuleScreen, PageHero } from "../../../components/ui";
 import { useAppState } from "../../../state/AppStateContext";
+import { formatDate, formatDateTime } from "../../../utils/format";
 import { PremiumGate, usePortalNavigation } from "../../portal/components/portalPageShared";
 
 const answerScale = [
@@ -515,7 +516,7 @@ export default function PsychometricTestPage() {
             addTestHistory({
               id: `psychometric-${Date.now()}`,
               title: "Full Assessment Report",
-              subtitle: `Completed on ${new Date().toLocaleDateString("en-IN")} - Overall score ${finalReport.overallPercent}%`,
+              subtitle: `Completed on ${formatDate(new Date())} - Overall score ${finalReport.overallPercent}%`,
               status: "Report Ready",
             });
             setSelectedReportModule("interest");
@@ -542,7 +543,7 @@ export default function PsychometricTestPage() {
       addTestHistory({
         id: `psychometric-${Date.now()}`,
         title: "Full Assessment Report",
-        subtitle: `Completed on ${new Date().toLocaleDateString("en-IN")} - Overall score ${report.overallPercent}%`,
+        subtitle: `Completed on ${formatDate(new Date())} - Overall score ${report.overallPercent}%`,
         status: "Report Ready",
       });
       setSelectedReportModule("interest");
@@ -563,7 +564,7 @@ export default function PsychometricTestPage() {
   }
 
   function handleDownloadReport() {
-    const generatedOn = new Date().toLocaleString("en-IN");
+    const generatedOn = formatDateTime(new Date());
     const moduleRows = report.modules
       .map(
         (module) => `

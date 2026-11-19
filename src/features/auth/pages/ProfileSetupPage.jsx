@@ -10,7 +10,8 @@ import {
   isValidEmail,
   isValidDateInput,
   isValidMobileNumber,
-  isValidPassword,
+  isStrongPassword,
+  PASSWORD_POLICY_MESSAGE,
   splitFullName,
 } from "../../../utils/auth";
 import { AuthShell } from "../components/AuthShell";
@@ -43,8 +44,13 @@ function isValidDisplayDate(val) {
   if (!val) return false;
   if (!/^\d{2}-\d{2}-\d{4}$/.test(val)) return false;
   const iso = toIsoDate(val);
-  const d = new Date(iso);
-  return !Number.isNaN(d.getTime());
+  // Reject impossible dates (e.g. 31-02-2010) that Date would silently roll over
+  if (!isValidDateInput(iso)) return false;
+  const d = new Date(`${iso}T00:00:00.000Z`);
+  const now = new Date();
+  const minAgeCutoff = new Date(Date.UTC(now.getUTCFullYear() - 5, now.getUTCMonth(), now.getUTCDate()));
+  const maxAgeCutoff = new Date(Date.UTC(now.getUTCFullYear() - 120, now.getUTCMonth(), now.getUTCDate()));
+  return d <= minAgeCutoff && d >= maxAgeCutoff;
 }
 
 // format typed digits into DD-MM-YYYY automatically
@@ -111,12 +117,12 @@ export default function ProfileSetupPage() {
       ? "Enter a valid 10 digit mobile number."
       : "";
   const passwordError =
-    values.password && !isValidPassword(values.password)
-      ? "Password must be at least 6 characters."
+    values.password && !isStrongPassword(values.password)
+      ? PASSWORD_POLICY_MESSAGE
       : "";
   const dobError =
     values.dob && !isValidDisplayDate(values.dob)
-      ? "Enter a valid date in DD-MM-YYYY format."
+      ? "Enter a valid date of birth in DD-MM-YYYY format (age 5 to 120)."
       : "";
 
   const canSubmit =
@@ -124,7 +130,7 @@ export default function ProfileSetupPage() {
     values.username.trim() &&
     isValidEmail(values.email) &&
     isValidMobileNumber(values.mobile) &&
-    isValidPassword(values.password) &&
+    isStrongPassword(values.password) &&
     values.address.trim() &&
     values.city.trim() &&
     values.stateName.trim() &&
@@ -161,7 +167,6 @@ export default function ProfileSetupPage() {
       gender: values.gender,
       address: values.address.trim(),
       dataOfBirth: new Date(isoDate).toISOString(),
-      image: "image_url.png",
       mobile: "+91" + values.mobile,
       status: "Active",
       landingData: buildLandingData(mergedOnboarding),
@@ -187,7 +192,7 @@ export default function ProfileSetupPage() {
       });
       setProfileIncomplete(false);
 
-      navigate("/promo");
+      navigate("/promo", { replace: true });
     } catch (error) {
       setStatus({
         type: "error",

@@ -1,5 +1,6 @@
 import axios from "axios";
 import { useAuthStore } from "../store/authStore";
+import { COOKIE_MODE } from "../utils/cookieMode";
 
 function cleanBaseUrl(baseUrl) {
   return baseUrl?.replace(/\/$/, "");
@@ -9,7 +10,8 @@ function resolveApiBaseUrl(baseUrl) {
   const cleaned = cleanBaseUrl(baseUrl);
 
   if (!cleaned) {
-    return "http://localhost:5000/api";
+    // Local development fallback only; production builds must set VITE_API_BASE_URL.
+    return import.meta.env.DEV ? "http://localhost:5000/api" : "/api";
   }
 
   return cleaned.endsWith("/api") ? cleaned : `${cleaned}/api`;
@@ -59,6 +61,7 @@ function removeHeaderValue(headers, key) {
 
 const api = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: COOKIE_MODE,
   timeout: 20000,
   headers: {
     "Content-Type": "application/json",
@@ -80,10 +83,41 @@ function isPublicAuthRoute(requestUrl) {
   );
 }
 
+const PUBLIC_PATH_PREFIXES = [
+  "/auth-entry",
+  "/onboarding",
+  "/login",
+  "/signup",
+  "/otp-verify",
+  "/profile-setup",
+  "/forgot-password",
+  "/reset-password",
+  "/splash",
+];
+
 function redirectToAuthEntry() {
-  if (typeof window !== "undefined" && window.location.pathname.startsWith("/app")) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const path = window.location.pathname;
+  const isPublicPath = path === "/" || PUBLIC_PATH_PREFIXES.some((prefix) => path.startsWith(prefix));
+
+  if (!isPublicPath) {
     window.location.replace("/auth-entry");
   }
+}
+
+// Only an explicit rejection of the refresh token ends the session; network
+// errors, timeouts and 5xx responses must not log the user out.
+function isRefreshRejected(refreshError) {
+  const refreshStatus = refreshError?.response?.status;
+
+  if (refreshStatus) {
+    return refreshStatus === 401 || refreshStatus === 403;
+  }
+
+  return !refreshError?.request;
 }
 
 async function refreshSession() {
@@ -91,17 +125,31 @@ async function refreshSession() {
     refreshSessionPromise = (async () => {
       const refreshToken = useAuthStore.getState().refreshToken;
 
-      if (!refreshToken) {
+      // Cookie mode: the httpOnly cookie carries the token; a token still in storage from an
+      // older login is sent once so the server can move that session to the cookie.
+      if (!refreshToken && !COOKIE_MODE) {
         throw new Error("Refresh token missing");
       }
 
-      const response = await axios.post(`${API_BASE_URL}/auth/refresh-token`, {
-        refreshToken,
-      });
+      const response = await axios.post(
+        `${API_BASE_URL}/auth/refresh-token`,
+        refreshToken ? { refreshToken } : {},
+        COOKIE_MODE ? { withCredentials: true } : undefined
+      );
       const nextAccessToken = response?.data?.accessToken;
 
       if (!nextAccessToken) {
         throw new Error("Refresh token request did not return an access token");
+      }
+
+      // The refresh cookie may belong to a different account (e.g. another login on the same
+      // browser). Never swap this user's session for someone else's.
+      const signedInUser = useAuthStore.getState().user;
+      const signedInId = signedInUser?.id ?? signedInUser?._id;
+      if (signedInId != null && response?.data?.userId != null && String(response.data.userId) !== String(signedInId)) {
+        const mismatch = new Error("Session belongs to a different account");
+        mismatch.response = { status: 401 };
+        throw mismatch;
       }
 
       useAuthStore.getState().updateAuthSession({
@@ -109,6 +157,8 @@ async function refreshSession() {
         refreshToken: response?.data?.refreshToken,
         user: response?.data?.user,
       });
+      // Now that the cookie holds the session, drop any copy kept in browser storage.
+      if (COOKIE_MODE) useAuthStore.getState().updateAuthSession({ refreshToken: "" });
 
       return nextAccessToken;
     })().finally(() => {
@@ -169,8 +219,10 @@ api.interceptors.response.use(
       setHeaderValue(retryConfig.headers, "Authorization", `Bearer ${nextAccessToken}`);
       return api.request(retryConfig);
     } catch (refreshError) {
-      useAuthStore.getState().logout();
-      redirectToAuthEntry();
+      if (isRefreshRejected(refreshError)) {
+        useAuthStore.getState().logout();
+        redirectToAuthEntry();
+      }
       return Promise.reject(refreshError);
     }
   }

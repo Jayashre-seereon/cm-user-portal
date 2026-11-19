@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   FileTextOutlined,
   TeamOutlined,
@@ -25,6 +25,7 @@ import {
 import { useAppState } from "../../../state/AppStateContext";
 import { useBrowserStepHistory } from "../../../shared/useBrowserStepHistory";
 import { useScrollToTopOnChange } from "../../../shared/useScrollToTopOnChange";
+import { useVerifiedAccessStatus } from "../../../shared/useVerifiedAccessStatus";
 const QUIZ_ICONS = [
   <FileTextOutlined key="file" />,
   <MedicineBoxOutlined key="medicine" />,
@@ -135,11 +136,8 @@ function normalizeQuizQuestions(quiz) {
 function getQuizQuestions(quiz) {
   const normalized = normalizeQuizQuestions(quiz);
 
-  if (normalized.length) {
-    return normalized;
-  }
-
-  return mapFallbackQuestions(Number(quiz?.id || 0));
+  // A quiz without questions stays empty (no fake sample questions / ids).
+  return normalized;
 }
 
 function getQuizTitle(quiz) {
@@ -151,7 +149,7 @@ function getQuizMeta(quiz) {
   return {
     title: getQuizTitle(quiz),
     questions,
-    count: questions.length || quiz?.questions?.length || sampleQuizQuestions.length,
+    count: questions.length,
   };
 }
 
@@ -159,7 +157,7 @@ export default function QuizPage() {
  const { navigate, location } = usePortalNavigation();
 const { isUnlocked } = useAppState();
 
-const accessStatus = location.state?.accessStatus || "preview";
+const accessStatus = useVerifiedAccessStatus(location.state);
 const unlocked =
   accessStatus === "full" || isUnlocked("quiz");
   const [unlockModalItem, setUnlockModalItem] = useState(null);
@@ -172,6 +170,8 @@ const unlocked =
   const [completed, setCompleted] = useState(false);
   const [result, setResult] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const deepLinkHandledRef = useRef("");
   useBrowserStepHistory("quizView", { activeQuizId }, ({ activeQuizId: previousQuizId }) => {
     setActiveQuizId(previousQuizId || null);
     setCurrent(0);
@@ -219,18 +219,24 @@ const unlocked =
     const quizTitle = params.get("quiz") || location.state?.searchItem?.title || location.state?.searchItem?.name;
     if (!quizId && !quizTitle) return;
 
+    if (!quizzes.length) return;
+    const handleKey = `${quizId || ""}|${quizTitle || ""}`;
+    if (deepLinkHandledRef.current === handleKey) return;
+    deepLinkHandledRef.current = handleKey;
+
     const normalizedTitle = normalizeQuizTitle(quizTitle);
-    const selectedQuiz = quizzes.find((quiz) =>
-      (quizId && String(quiz.id) === String(quizId)) ||
-      (normalizedTitle && normalizeQuizTitle(quiz.title) === normalizedTitle)
-    );
+    let selectedQuiz = quizId ? quizzes.find((quiz) => String(quiz.id) === String(quizId)) : null;
+    if (!selectedQuiz && normalizedTitle) {
+      const titleMatches = quizzes.filter((quiz) => normalizeQuizTitle(quiz.title) === normalizedTitle);
+      if (titleMatches.length === 1) selectedQuiz = titleMatches[0];
+    }
     if (selectedQuiz) setActiveQuizId(selectedQuiz.id);
   }, [quizzes, location.search, location.state]);
 
   const activeQuiz = useMemo(() => quizzes.find((quiz) => String(quiz.id) === String(activeQuizId)) || null, [activeQuizId, quizzes]);
   const quizMeta = useMemo(() => (activeQuiz ? getQuizMeta(activeQuiz) : null), [activeQuiz]);
   const questions = quizMeta?.questions || [];
-  const totalQ = questions.length || sampleQuizQuestions.length;
+  const totalQ = questions.length;
   const score = answers.filter((answer, index) => {
     const selected = answer;
     const correctOption = questions[index]?.options?.find((option) => option.isCorrect);
@@ -253,10 +259,8 @@ const unlocked =
       navigate(location.state.returnTo || "/app/dashboard");
       return;
     }
-    if (activeQuizId) {
-      window.history.back();
-      return;
-    }
+    setActiveQuizId(null);
+    setSubmitError("");
     setCurrent(0);
     setAnswers([]);
     setCompleted(false);
@@ -265,10 +269,20 @@ const unlocked =
   };
 
   const startQuiz = (quiz) => {
+    if (!getQuizMeta(quiz).count) {
+      setLoadError("This quiz does not have any questions yet.");
+      return;
+    }
+    setLoadError("");
     setActiveQuizId(quiz.id);
   };
 
   const handleFinish = async () => {
+    if (!questions.length || answers.some((answer) => answer === null || answer === undefined)) {
+      setSubmitError("Please answer every question before finishing.");
+      return;
+    }
+    setSubmitError("");
     const payloadAnswers = questions.map((question, index) => ({
       questionId: Number(question.id) || question.id,
       selectedOption: answers[index],
@@ -282,18 +296,16 @@ const unlocked =
         answers: payloadAnswers,
       });
 
-      setResult(response || { score: `${score}/${totalQ}`, total: totalQ, correct: score, wrong: totalQ - score });
+      if (!response) {
+        throw new Error("Could not record your quiz result. Please try again.");
+      }
+
+      setResult(response);
+      setCompleted(true);
     } catch (error) {
-      setResult({
-        score: `${score}/${totalQ}`,
-        total: totalQ,
-        correct: score,
-        wrong: totalQ - score,
-        message: error?.response?.data?.message || error?.message || "Quiz submitted locally.",
-      });
+      setSubmitError(error?.response?.data?.message || error?.message || "Could not submit the quiz. Please try again.");
     } finally {
       setSubmitting(false);
-      setCompleted(true);
     }
   };
 
@@ -406,6 +418,8 @@ const unlocked =
             })}
           </div>
 
+          {submitError ? <Alert type="error" showIcon message={submitError} className="mb-4" style={{ borderRadius: 12 }} /> : null}
+
           <button
             onClick={() => {
               if (isLast) {
@@ -414,7 +428,7 @@ const unlocked =
                 setCurrent((value) => value + 1);
               }
             }}
-            disabled={answers[current] === null || submitting}
+            disabled={!question || answers[current] === null || answers[current] === undefined || submitting}
             className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-30"
             style={{ background: "#9a2119" }}
           >

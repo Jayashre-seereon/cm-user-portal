@@ -1,4 +1,5 @@
-import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { useState } from "react";
+import { Navigate, Outlet, useLocation, useSearchParams } from "react-router-dom";
 import { useAppState } from "../../state/AppStateContext";
 import { useAuthStore } from "../../store/authStore";
 
@@ -33,6 +34,31 @@ export function PublicOnly() {
     }
 
     return <Navigate to="/app/dashboard" replace />;
+  }
+
+  return <Outlet />;
+}
+
+// /profile-setup is only meaningful right after a verified signup OTP (tempToken).
+// The check is made once on mount so that completing signup (which clears the
+// tempToken) does not bounce the user away before they reach /promo.
+export function RequireSignupToken() {
+  const [allowed] = useState(() => Boolean(useAuthStore.getState().tempToken));
+
+  if (!allowed) {
+    return <Navigate to="/auth-entry" replace />;
+  }
+
+  return <Outlet />;
+}
+
+// /otp-verify needs to know which number the OTP was sent to.
+export function RequireOtpContext() {
+  const [params] = useSearchParams();
+  const signupMobile = useAuthStore((state) => state.signupForm?.mobile);
+
+  if (!params.get("identifier") && !signupMobile) {
+    return <Navigate to="/auth-entry" replace />;
   }
 
   return <Outlet />;
