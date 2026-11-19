@@ -28,6 +28,7 @@ import ReportImg7 from "../../../asset/report/report_7.png";
 import ReportImg8 from "../../../asset/report/report_8.png";
 import ReportImg9 from "../../../asset/report/report_9.png";
 import FeaturePsychometric from "../../../asset/report/feature_psychometric.jpg";
+import { formatDate, formatPhone } from "../../../utils/format";
 import FeatureOnetoone from "../../../asset/report/feature_onetoone.jpg";
 import FeatureMentorship from "../../../asset/report/feature_mentorship.jpg";
 import FeatureCell from "../../../asset/report/feature_cell.jpg";
@@ -39,7 +40,7 @@ function PageHeader({ studentFirstName }) {
   return (
     <div className="pdf-header">
       <div className="pdf-header-top">
-        <div className="pdf-header-name">{studentFirstName || "Aryaman"}</div>
+        <div className="pdf-header-name">{studentFirstName || "Student"}</div>
         <div className="pdf-header-logo">
           <img
             src={Logo}
@@ -94,6 +95,8 @@ export default function AssessmentReportPage() {
 
   const [loading, setLoading] = useState(true);
   const [reportData, setReportData] = useState(null);
+  // Sample report is only available for the "demo" route in development builds.
+  const isDemo = import.meta.env.DEV && attemptId === "demo";
 
   useEffect(() => {
     loadReport();
@@ -111,6 +114,8 @@ export default function AssessmentReportPage() {
         } else {
           setReportData(null);
         }
+      } else if (isDemo) {
+        setReportData({});
       } else {
         setReportData(null);
       }
@@ -149,41 +154,58 @@ export default function AssessmentReportPage() {
     );
   }
 
-  // Normalize API data or use full high-fidelity default dataset matching the PDF
+  if (!reportData) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#EAEFF4] p-4">
+        <div className="max-w-md rounded-2xl bg-white p-8 text-center shadow-lg">
+          <h2 className="text-2xl font-black text-[#1E232A]">Report not available</h2>
+          <p className="mt-2 text-sm text-[#6B7280]">
+            We could not load your Career Compass Report. It may not be ready yet, or the assessment may not be completed.
+          </p>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <Button type="primary" onClick={loadReport} style={{ background: "#8C1814", borderColor: "#8C1814" }}>
+              Retry
+            </Button>
+            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate("/app/assessment")}>
+              Back to Assessment
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Normalize API data (sample identity values are only used for the dev-only demo route)
   const rawData = reportData || {};
   const report = rawData.report || {};
   const student = report.student || rawData.student || {};
-  const studentName = student.name || rawData.studentName || rawData.user?.name || user?.name || "Aryaman Singh";
-  const studentFirstName = studentName.split(" ")[0] || "Aryaman";
-  const studentClass = student.class || rawData.className || rawData.class || user?.selectedClass || "10th";
-  const studentSchool = student.school || rawData.school || user?.school || "DAV, Pokhariput, BBSR";
-  const studentEmail = student.email || rawData.email || rawData.user?.email || user?.email || "aryaman1012@gmail.com";
-  const studentPhone = student.phone || rawData.phone || rawData.user?.mobile || user?.mobile || "+91-88958 12485";
-  const completedDate = student.completedAt || rawData.completedAt || rawData.createdAt || "2025-11-26T10:00:00.000Z";
+  const studentName = student.name || rawData.studentName || rawData.user?.name || user?.name || (isDemo ? "Aryaman Singh" : "Student");
+  const studentFirstName = studentName.split(" ")[0] || (isDemo ? "Aryaman" : "Student");
+  const studentClass = student.class || rawData.className || rawData.class || user?.selectedClass || (isDemo ? "10th" : "");
+  const studentSchool = student.school || rawData.school || user?.school || (isDemo ? "DAV, Pokhariput, BBSR" : "");
+  const studentEmail = student.email || rawData.email || rawData.user?.email || user?.email || (isDemo ? "aryaman1012@gmail.com" : "");
+  const studentPhone = student.phone || rawData.phone || rawData.user?.mobile || user?.mobile || (isDemo ? "+91-88958 12485" : "");
+  const completedDate = student.completedAt || rawData.completedAt || rawData.createdAt || (isDemo ? "2025-11-26T10:00:00.000Z" : new Date().toISOString());
 
-  const formattedDate = new Date(completedDate).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  const formattedDate = formatDate(completedDate) || "-";
 
   const yourProfiling =
     report.yourProfiling ||
     rawData.yourProfiling ||
     rawData.report?.yourProfiling ||
-    SAMPLE_PROFILING_REPORT;
+    (isDemo ? SAMPLE_PROFILING_REPORT : null);
 
-  const hollandCode = rawData.hollandCode || report.hollandProfile?.code || report.hollandCode || "ECS";
+  const hollandCode = rawData.hollandCode || report.hollandProfile?.code || report.hollandCode || (isDemo ? "ECS" : "N/A");
   const scores = rawData.scores || report.scores || {};
   const domains = report.domains || rawData.domains || {};
 
   // Goal Orientation
   const goalObj = domains.goalOrientation || {};
-  const longPct = goalObj.longTerm?.percentage ?? (scores.goalLong != null ? pct(scores.goalLong) : 80);
-  const shortPct = goalObj.shortTerm?.percentage ?? (scores.goalShort != null ? pct(scores.goalShort) : 100);
+  const longPct = goalObj.longTerm?.percentage ?? (scores.goalLong != null ? pct(scores.goalLong) : (isDemo ? 80 : 0));
+  const shortPct = goalObj.shortTerm?.percentage ?? (scores.goalShort != null ? pct(scores.goalShort) : (isDemo ? 100 : 0));
 
   // Interests Scores (RIASEC)
-  const interestScoreMap = { E: 100, C: 95, S: 85, R: 80, I: 55, A: 55 };
+  const interestScoreMap = isDemo ? { E: 100, C: 95, S: 85, R: 80, I: 55, A: 55 } : { E: 0, C: 0, S: 0, R: 0, I: 0, A: 0 };
   const domainInterests = domains.interests || [];
   domainInterests.forEach((d) => {
     if (d.facet && (d.percentage != null || d.score != null)) {
@@ -192,7 +214,7 @@ export default function AssessmentReportPage() {
   });
 
   // Personality Scores (OCEAN)
-  const personScoreMap = { ES: 75, O: 63, Cn: 50, Ex: 50, Ag: 46 };
+  const personScoreMap = isDemo ? { ES: 75, O: 63, Cn: 50, Ex: 50, Ag: 46 } : { ES: 0, O: 0, Cn: 0, Ex: 0, Ag: 0 };
   const domainPerson = domains.personality || [];
   domainPerson.forEach((d) => {
     if (d.facet && (d.percentage != null || d.score != null)) {
@@ -201,7 +223,7 @@ export default function AssessmentReportPage() {
   });
 
   // Work Values Scores (Schwartz)
-  const valScoreMap = { OC: 100, SE: 95, ST: 60, CO: 56 };
+  const valScoreMap = isDemo ? { OC: 100, SE: 95, ST: 60, CO: 56 } : { OC: 0, SE: 0, ST: 0, CO: 0 };
   const domainValues = domains.values || [];
   domainValues.forEach((d) => {
     if (d.facet && (d.percentage != null || d.score != null)) {
@@ -210,7 +232,7 @@ export default function AssessmentReportPage() {
   });
 
   // Learning Styles Scores (VARK)
-  const varkScoreMap = { V: 100, Rd: 85, A: 75, K: 60 };
+  const varkScoreMap = isDemo ? { V: 100, Rd: 85, A: 75, K: 60 } : { V: 0, Rd: 0, A: 0, K: 0 };
   const domainVark = domains.learningStyles || [];
   domainVark.forEach((d) => {
     if (d.facet && (d.percentage != null || d.score != null)) {
@@ -219,7 +241,7 @@ export default function AssessmentReportPage() {
   });
 
   // Aptitude Scores (6 Core)
-  const aptScoreMap = { Verb: 43, Log: 33, Voc: 33, Mech: 33, Spat: 15, Num: 14 };
+  const aptScoreMap = isDemo ? { Verb: 43, Log: 33, Voc: 33, Mech: 33, Spat: 15, Num: 14 } : { Verb: 0, Log: 0, Voc: 0, Mech: 0, Spat: 0, Num: 0 };
   const domainApt = domains.aptitudes || [];
   domainApt.forEach((d) => {
     if (d.facet && (d.percentage != null || d.score != null)) {
@@ -288,7 +310,7 @@ const rankedDomains = (items, fallbackItems, minScore = 45, labels = {}) => {
 const topPersonalityTrait = [...domainPerson].sort((a, b) => scoreFor(b) - scoreFor(a))[0];
 const goalOrientationSummary = Math.abs(longPct - shortPct) <= 10 ? "Balanced Planner" : (longPct > shortPct ? "Long-Term Visionary" : "Short-Term Achiever");
   // 5 Top Default fallback clusters matching the PDF
-  const defaultTop5 = [
+  const sampleTop5 = [
     {
       rank: 1,
       code: "BIZ",
@@ -451,6 +473,18 @@ const goalOrientationSummary = Math.abs(longPct - shortPct) <= 10 ? "Balanced Pl
       ],
     },
   ];
+  // Real results never borrow the sample clusters; missing clusters render as a neutral "Not available".
+  const emptyCluster = (rank) => ({
+    rank,
+    code: "NA",
+    name: "NOT AVAILABLE",
+    matchPercentage: 0,
+    description: "Cluster recommendation not available for this report.",
+    why_fit: "",
+    streams_and_pathways_india: "",
+    careers: [],
+  });
+  const defaultTop5 = isDemo ? sampleTop5 : [1, 2, 3, 4, 5].map(emptyCluster);
 
   const rawTop5 =
     report.careerClusters?.top5 ||
@@ -504,7 +538,7 @@ const goalOrientationSummary = Math.abs(longPct - shortPct) <= 10 ? "Balanced Pl
       rank: idx + 1,
       code,
       name: (item?.name || item?.cluster || meta?.name || fallback?.name || "").toUpperCase(),
-      matchPercentage: item?.matchPercentage ?? item?.match ?? fallback?.matchPercentage ?? 60,
+      matchPercentage: item?.matchPercentage ?? item?.match ?? fallback?.matchPercentage ?? (isDemo ? 60 : 0),
       description: item?.description || meta?.description || fallback?.description || "",
       why_fit: item?.why_fit || item?.whyFit || meta?.why_fit || fallback?.why_fit || "",
       streams_and_pathways_india:
@@ -664,7 +698,7 @@ const goalOrientationSummary = Math.abs(longPct - shortPct) <= 10 ? "Balanced Pl
               <div><span className="font-normal text-[#374151]">Class:</span> <span className="font-semibold text-[#111827] ml-1.5">{studentClass}</span></div>
                <div><span className="font-normal text-[#374151]">Date:</span> <span className="font-semibold text-[#111827] ml-1.5">{formattedDate}</span></div>
               <div><span className="font-normal text-[#374151]">Email Id:</span> <span className="font-semibold text-[#111827] ml-1.5">{studentEmail}</span></div>
-              <div><span className="font-normal text-[#374151]">Phone No:</span> <span className="font-semibold text-[#111827] ml-1.5">{studentPhone}</span></div>
+              <div><span className="font-normal text-[#374151]">Phone No:</span> <span className="font-semibold text-[#111827] ml-1.5">{formatPhone(studentPhone) || studentPhone}</span></div>
             </div>
           </div>
 
@@ -728,14 +762,16 @@ const goalOrientationSummary = Math.abs(longPct - shortPct) <= 10 ? "Balanced Pl
         {/* ============================================================
             PAGE 3: YOUR PROFILING (PERSONAL PROFILING)
         ============================================================ */}
-        <YourProfilingReport
-          profilingData={yourProfiling}
-          studentFirstName={studentFirstName}
-          PageHeader={PageHeader}
-          PageFooter={PageFooter}
-          TitlePill={TitlePill}
-          pageNum={3}
-        />
+        {yourProfiling ? (
+          <YourProfilingReport
+            profilingData={yourProfiling}
+            studentFirstName={studentFirstName}
+            PageHeader={PageHeader}
+            PageFooter={PageFooter}
+            TitlePill={TitlePill}
+            pageNum={3}
+          />
+        ) : null}
 
         {/* ============================================================
             PAGE 4: INTRODUCTION (WHEEL / BULB DIAGRAM)

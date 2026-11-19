@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { COOKIE_MODE } from "../utils/cookieMode";
 
 const initialSignupForm = {
   name: "",
@@ -56,17 +57,41 @@ export const useAuthStore = create(
       setTempToken: (tempToken) => set(() => ({ tempToken })),
 
       setAuthSession: ({ accessToken = "", refreshToken = "", user = null }) =>
-        set(() => ({
-          accessToken,
-          refreshToken,
-          user,
-          tempToken: "",
-        })),
+        set((state) => {
+          // A different account is signing in: remove the previous user's cached
+          // assessment answers, bookings and profile so nothing leaks across users.
+          const previousId = state.user?.id ?? state.user?._id;
+          const nextId = user?.id ?? user?._id;
+          if (
+            previousId != null &&
+            nextId != null &&
+            String(previousId) !== String(nextId) &&
+            typeof window !== "undefined"
+          ) {
+            try {
+              window.localStorage.removeItem("careermap-userportal-state");
+              window.localStorage.removeItem("careermap-reviewed-mentor-bookings");
+              window.localStorage.removeItem("careermap_responses");
+              Object.keys(window.localStorage)
+                .filter((key) => key.startsWith("assessment:"))
+                .forEach((key) => window.localStorage.removeItem(key));
+              window.sessionStorage.clear();
+            } catch {
+              // storage unavailable
+            }
+          }
+          return {
+            accessToken,
+            refreshToken: COOKIE_MODE ? "" : refreshToken,
+            user,
+            tempToken: "",
+          };
+        }),
 
       updateAuthSession: ({ accessToken, refreshToken, user } = {}) =>
         set((state) => ({
           accessToken: accessToken ?? state.accessToken,
-          refreshToken: refreshToken ?? state.refreshToken,
+          refreshToken: COOKIE_MODE && refreshToken !== "" && refreshToken !== undefined ? "" : (refreshToken ?? state.refreshToken),
           user: user ?? state.user,
           tempToken: "",
         })),
@@ -90,6 +115,10 @@ export const useAuthStore = create(
             window.localStorage.removeItem("user");
             window.localStorage.removeItem("accessToken");
             window.localStorage.removeItem("refreshToken");
+            window.localStorage.removeItem("careermap_responses");
+            Object.keys(window.localStorage)
+              .filter((key) => key.startsWith("assessment:"))
+              .forEach((key) => window.localStorage.removeItem(key));
             window.sessionStorage.clear();
           } catch (e) {
             console.error("Storage clear error on authStore logout:", e);
@@ -111,10 +140,14 @@ export const useAuthStore = create(
       version: 2,
       migrate: (persistedState) => ({
         ...persistedState,
+        signupForm: persistedState?.signupForm
+          ? { ...persistedState.signupForm, password: "", confirmPassword: "" }
+          : persistedState?.signupForm,
         pendingInstituteOnboarding: false,
       }),
       partialize: (state) => ({
-        signupForm: state.signupForm,
+        // Never persist the signup password to localStorage
+        signupForm: { ...state.signupForm, password: "", confirmPassword: "" },
         onboardingData: state.onboardingData,
         tempToken: state.tempToken,
         accessToken: state.accessToken,

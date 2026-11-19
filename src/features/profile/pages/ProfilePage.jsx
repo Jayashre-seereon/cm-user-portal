@@ -15,9 +15,10 @@ import { getApiErrorMessage } from "../../../api/authApi";
 import { updateUserProfile } from "../../../api/userApi";
 import { useAppState } from "../../../state/AppStateContext";
 import { usePortalNavigation } from "../../portal/components/portalPageShared";
-import { buildUsername, isValidDateInput, mapApiUserToProfile, splitFullName } from "../../../utils/auth";
+import { isValidDateInput, mapApiUserToProfile, splitFullName } from "../../../utils/auth";
 import { useLocation } from "react-router-dom";
 import dayjs from "dayjs";
+import { formatCurrency, formatDate, formatPhone } from "../../../utils/format";
 
 export default function ProfilePage() {
   const {
@@ -43,9 +44,13 @@ export default function ProfilePage() {
   const [status, setStatus] = useState(null);
   const [form, setForm] = useState(userProfile);
 
+  // Reset the edit form only when the modal opens, so background profile
+  // refreshes do not discard what the user is typing.
   useEffect(() => {
-    setForm(userProfile);
-  }, [userProfile]);
+    if (editOpen) {
+      setForm(userProfile);
+    }
+  }, [editOpen]);
 
   useEffect(() => {
     if (profileEditRequestKey > 0) {
@@ -62,7 +67,7 @@ export default function ProfilePage() {
 
   const profileName = useMemo(() => userProfile.name || "Your profile", [userProfile.name]);
   const profileEmail = useMemo(() => userProfile.email || "No email added yet", [userProfile.email]);
-  const dobError = form.dob && !dobToIso(form.dob) ? "Enter a valid date in DD/MM/YYYY format." : "";
+  const dobError = form.dob && !dobToIso(form.dob) ? "Enter a valid date in DD-MM-YYYY format." : "";
   const canSaveProfile = !form.dob || Boolean(dobToIso(form.dob));
 
   const scrollableCardClass = "h-[320px] min-w-0 overflow-y-auto overflow-x-hidden scrollbar-hide";
@@ -90,7 +95,7 @@ export default function ProfilePage() {
   }
 
   function dobToIso(value = "") {
-    const match = String(value).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    const match = String(value).match(/^(\d{2})[/-](\d{2})[/-](\d{4})$/);
     const isoMatch = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
     const iso = match
       ? `${match[3]}-${match[2]}-${match[1]}`
@@ -119,7 +124,7 @@ export default function ProfilePage() {
 
   async function handleProfileSave() {
     if (form.dob && !dobToIso(form.dob)) {
-      setStatus({ type: "error", message: "Enter a valid date in DD/MM/YYYY format." });
+      setStatus({ type: "error", message: "Enter a valid date in DD-MM-YYYY format." });
       return;
     }
 
@@ -127,7 +132,6 @@ export default function ProfilePage() {
     const payload = {
       firstName,
       lastName,
-      username: buildUsername(form.name, form.email),
       email: form.email?.trim(),
       country: form.country?.trim(),
       state: form.stateName?.trim(),
@@ -247,13 +251,13 @@ export default function ProfilePage() {
                             {item.subscriptionName || item.planName}
                           </span>
                           <span className="block text-sm font-bold text-ink">
-                            {item.amount !== "" && item.amount != null ? `Rs ${item.amount}` : item.price}
+                            {item.amount !== "" && item.amount != null ? formatCurrency(item.amount) || `Rs ${item.amount}` : item.price}
                           </span>
                       </div>
                       <div className="col-start-2 flex min-w-0 items-center justify-between gap-2 sm:col-start-auto sm:justify-end sm:gap-3">
                         <div className="min-w-0 text-left sm:text-right">
                           <span className="block text-[10px] font-bold uppercase text-muted sm:text-xs">Validity</span>
-                          <span className="block break-words text-sm font-bold leading-tight text-ink">{item.validity || item.expiryDate}</span>
+                          <span className="block break-words text-sm font-bold leading-tight text-ink">{item.validity || formatDate(item.expiryDate) || item.expiryDate}</span>
                         </div>
                         <Tag color={String(item.status || "").toLowerCase() === "active" ? "green" : "default"} className={`!m-0 !shrink-0 !rounded-full !px-3 !font-bold uppercase ${String(item.status || "").toLowerCase() === "active" ? "" : "!border-gray-300 !bg-gray-200 !text-gray-600"}`}>
                           {item.status || "Inactive"}
@@ -386,18 +390,18 @@ export default function ProfilePage() {
                     {key === "dob" ? (
                       <DatePicker
                         value={dobToIso(form.dob) ? dayjs(dobToIso(form.dob), "YYYY-MM-DD") : null}
-                        format="DD/MM/YYYY"
-                        placeholder="DD/MM/YYYY"
+                        format="DD-MM-YYYY"
+                        placeholder="DD-MM-YYYY"
                         inputReadOnly
                         className="!h-12 !w-full !rounded-2xl !border-[#e1d6cf] !bg-white !px-4 !text-[14px]"
                         onChange={(date) => setForm((current) => ({
                           ...current,
-                          dob: date ? date.format("DD/MM/YYYY") : "",
+                          dob: date ? date.format("DD-MM-YYYY") : "",
                         }))}
                         disabledDate={(date) => date && date.isAfter(dayjs(), "day")}
                       />
                     ) : <Input
-                      value={form[key] || ""}
+                      value={key === "mobile" ? formatPhone(form[key]) : (form[key] || "")}
                       disabled={key === "email" || key === "mobile"}
                       placeholder={`Enter ${String(label).toLowerCase()}`}
                       className="!h-12 !rounded-2xl !border-[#e1d6cf] !bg-white !px-4 !text-[14px]"

@@ -88,7 +88,8 @@ export async function saveBatchAttemptAnswers(attemptId, answers = []) {
   const payload = Array.isArray(answers) ? answers : answers?.answers || [];
   const response = await api.post(
     `/psychometric-assessment/assessment/attempt/${attemptId}/batch-answers`,
-    Array.isArray(answers) ? payload : { answers: payload }
+    Array.isArray(answers) ? payload : { answers: payload },
+    { timeout: 60000 }
   );
   return extractData(response);
 }

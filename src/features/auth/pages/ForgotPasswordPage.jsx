@@ -1,6 +1,6 @@
 import { MailOutlined } from "@ant-design/icons";
 import { Alert, Button, Form, Input, Space, Typography } from "antd";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { forgotPassword, getApiErrorMessage } from "../../../api/authApi";
 import { AuthShell } from "../components/AuthShell";
@@ -13,8 +13,17 @@ export default function ForgotPasswordPage() {
   const [form] = Form.useForm();
   const [status, setStatus] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown <= 0) return undefined;
+    const timer = setTimeout(() => setCooldown((value) => value - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [cooldown]);
 
   async function handleSubmit(values) {
+    if (cooldown > 0) return;
+
     try {
       setIsSubmitting(true);
       setStatus(null);
@@ -25,6 +34,7 @@ export default function ForgotPasswordPage() {
         message: response?.message || "If the email exists, a reset link has been sent.",
       });
       form.resetFields();
+      setCooldown(30);
     } catch (error) {
       setStatus({
         type: "error",
@@ -57,8 +67,8 @@ export default function ForgotPasswordPage() {
             />
           </Form.Item>
 
-          <Button type="primary" htmlType="submit" block size="large" loading={isSubmitting} style={{ ...authPrimaryButtonStyle, width: "100%" }}>
-            {isSubmitting ? "Sending Link..." : "Send Reset Link"}
+          <Button type="primary" htmlType="submit" block size="large" loading={isSubmitting} disabled={cooldown > 0} style={{ ...authPrimaryButtonStyle, width: "100%" }}>
+            {isSubmitting ? "Sending Link..." : cooldown > 0 ? `Resend available in ${cooldown}s` : "Send Reset Link"}
           </Button>
         </Form>
 

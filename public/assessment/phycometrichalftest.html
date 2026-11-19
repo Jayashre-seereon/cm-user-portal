@@ -366,6 +366,7 @@
 </style>
 </head>
 <body>
+<a href="/app/dashboard" style="position:fixed;top:8px;left:8px;z-index:9999;padding:6px 12px;background:#fff;color:#8c1814;border:1px solid #8c1814;border-radius:999px;font:600 13px sans-serif;text-decoration:none;">&larr; Back to CareerMap</a>
 <div class="app">
 
   <div class="brandbar">
@@ -637,6 +638,7 @@ function saveResponseForAnalytics(report){
   try{
     const existing = JSON.parse(localStorage.getItem('careermap_responses') || '[]');
     existing.push(record);
+    while(existing.length > 20) existing.shift(); // cap the local safety-net copy
     localStorage.setItem('careermap_responses', JSON.stringify(existing));
   }catch(e){ /* localStorage unavailable — skip silently */ }
 

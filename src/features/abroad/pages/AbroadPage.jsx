@@ -16,6 +16,8 @@ import { useBrowserStepHistory } from "../../../shared/useBrowserStepHistory";
 import { useAppState } from "../../../state/AppStateContext";
 import { UnlockRedirectModal, usePortalNavigation } from "../../portal/components/portalPageShared";
 import { useScrollToTopOnChange } from "../../../shared/useScrollToTopOnChange";
+import { sanitizeHtml } from "../../../utils/sanitizeHtml";
+import { useVerifiedAccessStatus } from "../../../shared/useVerifiedAccessStatus";
 
 // Fixed, common to all destinations — shown once on the listing page, not per country
 const INTRO_TEXT =
@@ -232,7 +234,7 @@ function FormTextarea({
 export default function AbroadPage() {
   const { isUnlocked } = useAppState();
   const { navigate, location, goToDashboard } = usePortalNavigation();
-  const accessStatus = location.state?.accessStatus || "preview";
+  const accessStatus = useVerifiedAccessStatus(location.state);
   const unlocked = accessStatus === "full" || isUnlocked("abroad-consultancy");
 
   const [countryList, setCountryList] = useState([]);
@@ -565,8 +567,10 @@ if (selectedCountry) {
             "
             dangerouslySetInnerHTML={{
               __html:
-                selectedCountry.descriptionHtml ||
-                selectedCountry.description,
+                sanitizeHtml(
+                  selectedCountry.descriptionHtml ||
+                    selectedCountry.description
+                ),
             }}
           />
         </div>
@@ -2095,13 +2099,6 @@ if (selectedCountry) {
           </section>
 
 
-          {/* ERROR */}
-          {submitError ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
-              {submitError}
-            </div>
-          ) : null}
-
         </div>
       </div>
 
@@ -2111,6 +2108,13 @@ if (selectedCountry) {
       {/* ===================================================== */}
 
       <div className="shrink-0 border-t border-[#f0e4e2] bg-white px-6 py-4">
+
+        {/* ERROR (kept next to the Submit button so it is always visible) */}
+        {submitError ? (
+          <div role="alert" className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+            {submitError}
+          </div>
+        ) : null}
 
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
 
@@ -2190,6 +2194,76 @@ if (selectedCountry) {
                 setSubmitError(
                   "Please enter your course / programme."
                 );
+                return;
+              }
+
+              const todayText = new Date().toISOString().slice(0, 10);
+              const phoneDigits = (value) =>
+                String(value || "").replace(/\D/g, "").replace(/^91(?=\d{10}$)/, "");
+              const percentOk = (value) => {
+                const text = String(value || "").trim();
+                if (!text) return true;
+                const match = text.match(/^(\d+(?:\.\d+)?)\s*(%|cgpa)?$/i);
+                return Boolean(match) && Number(match[1]) <= 100;
+              };
+
+              if (
+                consultForm.dateOfBirth > todayText ||
+                consultForm.dateOfBirth < "1900-01-01"
+              ) {
+                setSubmitError("Please enter a valid date of birth.");
+                return;
+              }
+
+              if (
+                consultForm.whatsappNumber?.trim() &&
+                phoneDigits(consultForm.whatsappNumber).length !== 10
+              ) {
+                setSubmitError("Please enter a valid 10-digit WhatsApp number.");
+                return;
+              }
+
+              if (
+                consultForm.parentMobileNumber?.trim() &&
+                phoneDigits(consultForm.parentMobileNumber).length !== 10
+              ) {
+                setSubmitError("Please enter a valid 10-digit parent mobile number.");
+                return;
+              }
+
+              if (
+                consultForm.parentEmail?.trim() &&
+                !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(consultForm.parentEmail.trim())
+              ) {
+                setSubmitError("Please enter a valid parent email address.");
+                return;
+              }
+
+              if (consultForm.passingYear?.trim()) {
+                const year = Number(consultForm.passingYear.trim());
+                if (
+                  !/^\d{4}$/.test(consultForm.passingYear.trim()) ||
+                  year < 1950 ||
+                  year > new Date().getFullYear() + 8
+                ) {
+                  setSubmitError("Please enter a valid passing year.");
+                  return;
+                }
+              }
+
+              if (
+                !percentOk(consultForm.class10PercentageCGPA) ||
+                !percentOk(consultForm.class12PercentageCGPA)
+              ) {
+                setSubmitError("Class 10 / 12 percentage or CGPA must be a number up to 100.");
+                return;
+              }
+
+              if (
+                consultForm.passportExpiryDate &&
+                consultForm.passportExpiryDate < todayText
+              ) {
+                setSubmitError("Passport expiry date cannot be in the past.");
                 return;
               }
 
@@ -2335,10 +2409,6 @@ if (selectedCountry) {
                 };
 
 
-                console.log(
-                  "Study Abroad Consultation Payload:",
-                  payload
-                );
 
 
                 await createStudyAbroadConsultation(payload);

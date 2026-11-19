@@ -1,6 +1,7 @@
 import api from "./axios";
 import { useAuthStore } from "../store/authStore";
 import { palette } from "../data/careermapData";
+import { formatCurrency } from "../utils/format";
 
 const mentorAccentPalette = [
   palette.primary,
@@ -20,7 +21,7 @@ function formatMentorPrice(value) {
   const rawValue = String(value).trim();
   const numericValue = Number(rawValue.replace(/[^\d.]/g, ""));
   if (Number.isFinite(numericValue) && numericValue > 0) {
-    return `Rs ${numericValue.toLocaleString("en-IN")} / session`;
+    return `${formatCurrency(numericValue)} / session`;
   }
   if (rawValue.toLowerCase().includes("rs")) {
     return rawValue;
@@ -75,8 +76,12 @@ function formatAvailabilityDate(value) {
       month: "",
     };
   }
+  const isoPrefix = typeof value === "string" ? value.match(/^(\d{4}-\d{2}-\d{2})/) : null;
+  const pad = (n) => String(n).padStart(2, "0");
   return {
-    key: parsedDate.toISOString().split("T")[0],
+    key: isoPrefix
+      ? isoPrefix[1]
+      : `${parsedDate.getFullYear()}-${pad(parsedDate.getMonth() + 1)}-${pad(parsedDate.getDate())}`,
     day: parsedDate.toLocaleDateString("en-IN", { weekday: "short" }),
     date: String(parsedDate.getDate()),
     month: parsedDate.toLocaleDateString("en-IN", { month: "short" }),
@@ -168,7 +173,7 @@ function extractMentorItems(payload) {
 }
 
 export async function getMentors() {
-  const response = await api.get("/mentor/");
+  const response = await api.get("/mentor/", { params: { public: true } });
   const items = extractMentorItems(response?.data);
   return items.map((item, index) => mapMentorItem(item, index));
 }

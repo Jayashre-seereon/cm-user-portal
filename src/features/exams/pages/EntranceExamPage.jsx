@@ -16,6 +16,7 @@ import { checkModuleAccess } from "../../../api/moduleAccessApi";
 import { Select } from "antd";
 import { useBrowserStepHistory } from "../../../shared/useBrowserStepHistory";
 import { useScrollToTopOnChange } from "../../../shared/useScrollToTopOnChange";
+import { sanitizeHtml } from "../../../utils/sanitizeHtml";
 const { Option } = Select;
 
 const normalizeExamSearch = (value = "") =>
@@ -60,6 +61,7 @@ export default function EntranceExamPage() {
   const [categories, setCategories] = useState([]);
   const [selectedExamId, setSelectedExamId] = useState(""); 
   const [mode, setMode] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   useBrowserStepHistory("entranceExamView", { selectedExam }, ({ selectedExam: previousExam }) => {
     setSelectedExam(previousExam || null);
   }, !location.state?.fromGlobalSearch);
@@ -73,8 +75,6 @@ useEffect(() => {
       setError("");
 
       const response = await getEntranceExams();
-
-      console.log("Entrance Exams API Response:", response);
 
       if (active) {
         setItems(Array.isArray(response) ? response : []);
@@ -109,8 +109,6 @@ useEffect(() => {
   async function loadCategories() {
     try {
       const response = await getCategories();
-
-      console.log("Categories API Response:", response);
 
       if (active) {
         setCategories(
@@ -164,32 +162,41 @@ useEffect(() => {
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
     const examId = searchParams.get("examId") || location.state?.searchItem?.id;
-    const examName =
+    const examName = (
       searchParams.get("exam") ||
       searchParams.get("search") ||
-      location.state?.searchItem?.title;
+      location.state?.searchItem?.title ||
+      ""
+    ).trim();
 
     if (!examId && !examName) return;
+    if (loading || items.length === 0) return;
 
-    if (items.length > 0) {
-      const found = items.find(
+    let found = examId ? items.find((item) => String(item.id) === String(examId)) : null;
+    if (!found && examName) {
+      const target = normalizeExamSearch(examName);
+      const exact = items.filter(
         (item) =>
-          (examId && String(item.id) === String(examId)) ||
-          (examName &&
-            (item.name?.toLowerCase() === examName.toLowerCase() ||
-              item.title?.toLowerCase() === examName.toLowerCase()))
+          normalizeExamSearch(item.name) === target ||
+          normalizeExamSearch(item.title) === target
       );
-
-      if (found) {
-        setSelectedExam(found);
-      } else if (examName) {
-        const partialMatch = items.find((item) =>
-          item.name?.toLowerCase().includes(examName.toLowerCase())
-        );
-        if (partialMatch) setSelectedExam(partialMatch);
-      }
+      if (exact.length === 1) found = exact[0];
     }
-  }, [items, location.search, location.state]);
+
+    if (found) setSelectedExam(found);
+
+    // Clear the one-shot deep-link so closing the detail does not re-open it
+    const nextState = { ...(location.state || {}) };
+    delete nextState.searchItem;
+    const nextParams = new URLSearchParams(location.search);
+    ["examId", "exam", "search"].forEach((key) => nextParams.delete(key));
+    const nextSearch = nextParams.toString();
+    navigate(
+      { pathname: location.pathname, search: nextSearch ? `?${nextSearch}` : "" },
+      { replace: true, state: nextState }
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, loading, location.search, location.state]);
 
 
 const examOptions = useMemo(() => {
@@ -212,58 +219,82 @@ function scrollToSection(id) {
     });
   }
 }
+// Faceted filtering: every dropdown only offers values that still have results once
+// the OTHER filters are applied, so no combination can end in "No results found".
+const matchesFilters = (item, { category: c, exam, mode: m, status }) => {
+  const matchesCategory =
+    !c ||
+    [item.categoryObj, item.secondcategoryObj, item.subcategoryObj].some(
+      (cat) => cat && String(cat.id) === String(c)
+    );
+  const matchesExam = !exam || String(item.id) === String(exam);
+  const matchesMode =
+    !m || String(item.mode || "").trim().toLowerCase() === String(m).toLowerCase();
+
+  const lastDate = item.lastDateRaw ? new Date(item.lastDateRaw) : null;
+  const hasLastDate = lastDate && !Number.isNaN(lastDate.getTime());
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const isClosed = Boolean(hasLastDate && lastDate < todayStart);
+  const matchesStatus = !status || (status === "closed" ? isClosed : !isClosed);
+
+  return matchesCategory && matchesExam && matchesMode && matchesStatus;
+};
+
+const currentFilters = { category, exam: selectedExamId, mode, status: statusFilter };
+
 const categoryOptions = useMemo(() => {
-  return categories.map((item) => ({
-    value: String(item.id),
-    label: item.title,
-  }));
-}, [categories]);
+  const available = items.filter((item) =>
+    matchesFilters(item, { ...currentFilters, category: "" })
+  );
+  const ids = new Set(
+    available.flatMap((item) =>
+      [item.categoryObj, item.secondcategoryObj, item.subcategoryObj]
+        .filter(Boolean)
+        .map((c) => String(c.id))
+    )
+  );
+  return categories
+    .filter((item) => ids.has(String(item.id)) || String(item.id) === String(category))
+    .map((item) => ({
+      value: String(item.id),
+      label: item.title,
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [categories, items, selectedExamId, mode, statusFilter, category]);
 
 const modeOptions = useMemo(() => {
-  const uniqueModes = [
-    ...new Set(
-      items
-        .map((item) => item.mode)
-        .filter(
-          (item) =>
-            item &&
-            item !== "Mode not available"
-        )
-    ),
-  ];
+  const available = items.filter((item) =>
+    matchesFilters(item, { ...currentFilters, mode: "" })
+  );
+  const unique = new Map();
+  available.forEach((item) => {
+    const value = String(item.mode || "").trim();
+    if (value && value !== "Mode not available" && !unique.has(value.toLowerCase())) {
+      unique.set(value.toLowerCase(), value);
+    }
+  });
+  return [...unique.entries()].map(([key, label]) => ({ value: key, label }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [items, category, selectedExamId, statusFilter]);
 
-  return uniqueModes.map((item) => ({
-    value: item,
-    label: item,
-  }));
-}, [items]);
+const statusOptions = useMemo(() => {
+  const available = items.filter((item) =>
+    matchesFilters(item, { ...currentFilters, status: "" })
+  );
+  const options = [];
+  if (available.some((item) => matchesFilters(item, { status: "upcoming" })))
+    options.push({ value: "upcoming", label: "Upcoming" });
+  if (available.some((item) => matchesFilters(item, { status: "closed" })))
+    options.push({ value: "closed", label: "Closed" });
+  return options;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [items, category, selectedExamId, mode]);
+
 const filtered = useMemo(
-  () =>
-    items.filter((item) => {
-      const matchesCategory =
-        !category ||
-        String(item.categoryObj?.id) === String(category);
-
-      const matchesExam =
-        !selectedExamId ||
-        String(item.id) === String(selectedExamId);
-
-      const matchesMode =
-        !mode ||
-        String(item.mode) === String(mode);
-
-      return (
-        matchesCategory &&
-        matchesExam &&
-        matchesMode
-      );
-    }),
-  [
-    items,
-    category,
-    selectedExamId,
-    mode,
-  ]
+  () => items.filter((item) => matchesFilters(item, currentFilters)),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [items, category, selectedExamId, mode, statusFilter]
 );
 
 
@@ -392,7 +423,7 @@ if (selectedExam) {
                   prose-th:border-[#f0e4e2]
                   prose-th:p-2"
                 dangerouslySetInnerHTML={{
-                  __html: section.content,
+                  __html: sanitizeHtml(section.content),
                 }}
               />
             </div>
@@ -528,13 +559,27 @@ if (selectedExam) {
   />
 </div>
 
-  {(category || selectedExamId || mode) ? (
+  {/* Upcoming / Closed */}
+<div className="relative">
+  <Select
+    allowClear
+    placeholder="All Status"
+    value={statusFilter || undefined}
+    onChange={(value) => setStatusFilter(value || "")}
+    options={statusOptions}
+    style={{ minWidth: 150 }}
+    className="pill-select"
+  />
+</div>
+
+  {(category || selectedExamId || mode || statusFilter) ? (
     <button
       type="button"
       onClick={() => {
         setCategory("");
         setSelectedExamId("");
         setMode("");
+        setStatusFilter("");
       }}
       className="rounded-full px-2.5 py-1.5 text-[12px] font-semibold text-[#9a2119] underline-offset-2 hover:underline"
     >

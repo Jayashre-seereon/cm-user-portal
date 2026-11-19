@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRightOutlined, TrophyOutlined ,StarOutlined, StarFilled,LockOutlined,UnlockOutlined,FileTextOutlined} from "@ant-design/icons";
 import { Modal,Rate,Button ,Select} from "antd";
 import { useSearchParams, useLocation } from "react-router-dom";
@@ -16,18 +16,23 @@ import { UnlockRedirectModal, usePortalNavigation } from "../../portal/component
 import { loadRazorpayScript } from "../../../utils/razorpay.js";
 import { useBrowserStepHistory } from "../../../shared/useBrowserStepHistory";
 import { useScrollToTopOnChange } from "../../../shared/useScrollToTopOnChange";
+import { useVerifiedAccessStatus } from "../../../shared/useVerifiedAccessStatus";
+import { sanitizeHtml } from "../../../utils/sanitizeHtml";
+import { formatDate as formatSharedDate } from "../../../utils/format";
 
 function formatNumericDate(value) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
     return null;
   }
+  const isoPrefix = typeof value === "string" ? value.match(/^(\d{4}-\d{2}-\d{2})/) : null;
+  const pad = (n) => String(n).padStart(2, "0");
   return {
-    key: parsed.toISOString().split("T")[0],
+    key: isoPrefix ? isoPrefix[1] : `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}`,
     day: parsed.toLocaleDateString("en-IN", { weekday: "short" }),
     date: String(parsed.getDate()),
     month: parsed.toLocaleDateString("en-IN", { month: "short" }),
-    displayDate: parsed.toLocaleDateString("en-GB"),
+    displayDate: formatSharedDate(parsed),
   };
 }
 
@@ -44,7 +49,10 @@ function parseSlotEndDateTime(dateKey, timeSlot) {
     return null;
   }
 
-  const date = new Date(dateKey);
+  const keyMatch = String(dateKey).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const date = keyMatch
+    ? new Date(Number(keyMatch[1]), Number(keyMatch[2]) - 1, Number(keyMatch[3]))
+    : new Date(dateKey);
   if (Number.isNaN(date.getTime())) {
     return null;
   }
@@ -89,24 +97,10 @@ function getSlotEndTimeValue(timeSlot) {
   return rawValue.split("-").pop()?.trim() || rawValue;
 }
 
-function buildFallbackAvailability() {
-  const output = [];
-  for (let index = 0; index < 6; index += 1) {
-    const current = new Date();
-    current.setDate(current.getDate() + index);
-    const info = formatNumericDate(current);
-    output.push({
-      key: info.key,
-      day: info.day,
-      date: info.date,
-      month: info.month,
-      slots:
-        index % 4 === 1
-          ? []
-          : ["9:00 AM", "10:00 AM", "11:30 AM", "2:00 PM", "3:30 PM", "5:00 PM", "6:30 PM"].slice(0, 3 + (index % 3)),
-    });
-  }
-  return output;
+function todayDateKey() {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
 function normalizeAvailability(availability) {
@@ -126,9 +120,10 @@ function normalizeAvailability(availability) {
           slots: Array.isArray(item?.slots) ? item.slots.filter(Boolean) : [],
         };
       })
-      .filter(Boolean);
+      .filter(Boolean)
+      .filter((item) => !/^\d{4}-\d{2}-\d{2}$/.test(String(item.key)) || item.key >= todayDateKey());
   }
-  return buildFallbackAvailability();
+  return [];
 }
 
 function Avatar({ name, accent, avatar, image }) {
@@ -239,13 +234,26 @@ function ChevronDown() {
   );
 }
 
+function clearMentorStepSnapshot() {
+  // Drop the stale mentor/booking step snapshot from the current history entry after a booking.
+  try {
+    window.history.replaceState(
+      { ...window.history.state, mentorView: { selectedMentorId: "", selectedMentor: null } },
+      "",
+      window.location.href
+    );
+  } catch {
+    // history API unavailable; nothing to clear
+  }
+}
+
 export default function BookMentorPage() {
-  const { canAccessFreeDetail, isUnlocked, registerFreeDetailAccess, addBooking } = useAppState();
+  const { canAccessFreeDetail, isUnlocked, registerFreeDetailAccess, addBooking, refreshUserData } = useAppState();
   const { navigate, location, goToDashboard } = usePortalNavigation();
   const pageLocation = useLocation();
   const [params] = useSearchParams();
 
-  const accessStatus = pageLocation.state?.accessStatus || "preview";
+  const accessStatus = useVerifiedAccessStatus(pageLocation.state);
   const isModuleUnlocked =
   accessStatus === "full" ||
   accessStatus === "unlocked";
@@ -269,6 +277,13 @@ export default function BookMentorPage() {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [booked, setBooked] = useState(false);
+  const [payInProgress, setPayInProgress] = useState(false);
+  const [nowTick, setNowTick] = useState(0);
+  const handledMentorParamRef = useRef("");
+  useEffect(() => {
+    const timer = setInterval(() => setNowTick((value) => value + 1), 60000);
+    return () => clearInterval(timer);
+  }, []);
   useBrowserStepHistory(
     "mentorView",
     { selectedMentorId, selectedMentor },
@@ -336,7 +351,8 @@ export default function BookMentorPage() {
     );
   }, [mentorList, selectedMentor, selectedMentorId]);
 
-  const dates = useMemo(() => normalizeAvailability(activeMentor?.availability), [activeMentor]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const dates = useMemo(() => normalizeAvailability(activeMentor?.availability), [activeMentor, nowTick]);
 
   const selectedDateInfo = useMemo(
     () => dates.find((item) => item.key === selectedDate) || dates[0] || null,
@@ -365,7 +381,8 @@ export default function BookMentorPage() {
 
       return true;
     });
-  }, [dates, selectedDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dates, selectedDate, nowTick]);
 
   const bookedSlotKeys = useMemo(
     () => new Set((bookedSlots || []).map((slot) => normalizeSlotKey(slot)).filter(Boolean)),
@@ -394,7 +411,9 @@ export default function BookMentorPage() {
         setLoadError("");
         const items = await getMentors();
         if (active) {
-          setMentorList(Array.isArray(items) ? items : []);
+          setMentorList(
+            Array.isArray(items) ? items.filter((mentor) => mentor?.raw?.status !== false) : []
+          );
         }
       } catch (error) {
         if (active) {
@@ -419,6 +438,7 @@ export default function BookMentorPage() {
       pageLocation.state?.searchItem?.title;
 
     if (!mentorParam) return;
+    if (handledMentorParamRef.current === String(mentorParam)) return;
     let active = true;
 
     async function resolveMentor() {
@@ -427,6 +447,7 @@ export default function BookMentorPage() {
         try {
           const mentor = await getMentorById(mentorParam);
           if (active && mentor) {
+            handledMentorParamRef.current = String(mentorParam);
             setSelectedMentor(mentor);
             setSelectedMentorId(String(mentor.id));
             return;
@@ -435,12 +456,14 @@ export default function BookMentorPage() {
           // fall through to list lookup
         }
       }
-      const mentor = mentorList.find(
-        (item) =>
-          String(item.id) === String(mentorParam) ||
-          item.name?.toLowerCase() === String(mentorParam).toLowerCase()
-      );
+      const paramText = String(mentorParam).trim().toLowerCase();
+      let mentor = mentorList.find((item) => String(item.id) === String(mentorParam));
+      if (!mentor) {
+        const nameMatches = mentorList.filter((item) => item.name?.trim().toLowerCase() === paramText);
+        mentor = nameMatches.length === 1 ? nameMatches[0] : undefined;
+      }
       if (active && mentor) {
+        handledMentorParamRef.current = String(mentorParam);
         setSelectedMentor(mentor);
         setSelectedMentorId(String(mentor.id || mentor.name));
       }
@@ -495,6 +518,12 @@ export default function BookMentorPage() {
   }, [activeMentor?.id, selectedDate]);
 
   useEffect(() => {
+    if (selectedSlot && !slots.includes(selectedSlot)) {
+      setSelectedSlot("");
+    }
+  }, [slots, selectedSlot]);
+
+  useEffect(() => {
     if (!selectedSlot) return;
     if (bookedSlotKeys.has(normalizeSlotKey(selectedSlot))) {
       setSelectedSlot("");
@@ -523,17 +552,30 @@ export default function BookMentorPage() {
       });
       setProcessing(false);
       setBooked(true);
+      clearMentorStepSnapshot();
     }, 1600);
     return () => clearTimeout(timer);
   }, [activeMentor, addBooking, processing, selectedDate, selectedSlot]);
 
   // ── Payment ──────────────────────────────────────────────────────────────
-  const handlePayment = async () => {
-    setPaymentNotice("");
+  const refreshBookedSlotsAfterChange = async () => {
+    if (!activeMentor?.id || !selectedDate) return;
     try {
-      console.log("PAYMENT CLICKED");
+      const latest = await getBookedMentorSlots(activeMentor.id, selectedDate);
+      setBookedSlots(latest);
+      setBookedSlotsError("");
+    } catch {
+      // keep the previous booked slot list
+    }
+  };
+
+  const handlePayment = async () => {
+    if (payInProgress) return;
+    setPaymentNotice("");
+    setPayInProgress(true);
+    let checkoutOpened = false;
+    try {
       const loaded = await loadRazorpayScript();
-      console.log("SDK LOADED =", loaded);
       if (!loaded) {
         setPaymentNotice("Payment checkout could not be loaded. Please try again.");
         return;
@@ -543,7 +585,6 @@ export default function BookMentorPage() {
         date: selectedDate,
         timeSlot: selectedSlot,
       });
-      console.log("ORDER RESPONSE", orderResponse);
       const { order, key } = orderResponse;
       const options = {
         key,
@@ -553,22 +594,51 @@ export default function BookMentorPage() {
         name: "CareerMap",
         description: "Mentor Booking",
         handler: async function (response) {
-          await verifyMentorPayment({
-            mentorId: activeMentor.id,
-            date: selectedDate,
-            timeSlot: selectedSlot,
-            razorpay_order_id: response.razorpay_order_id,
-            razorpay_payment_id: response.razorpay_payment_id,
-            razorpay_signature: response.razorpay_signature,
-          });
-          setBooked(true);
+          try {
+            await verifyMentorPayment({
+              mentorId: activeMentor.id,
+              date: selectedDate,
+              timeSlot: selectedSlot,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            });
+            setBooked(true);
+            clearMentorStepSnapshot();
+            if (typeof refreshUserData === "function") {
+              try {
+                await refreshUserData();
+              } catch {
+                // dashboard data will refresh on next load
+              }
+            }
+            refreshBookedSlotsAfterChange();
+          } catch (verifyError) {
+            const reason =
+              verifyError?.response?.data?.message || verifyError?.message || "verification failed";
+            setPaymentNotice(
+              `Payment received but your booking could not be confirmed (${reason}). Please contact support with payment id ${response.razorpay_payment_id}.`
+            );
+            refreshBookedSlotsAfterChange();
+          } finally {
+            setPayInProgress(false);
+          }
+        },
+        modal: {
+          ondismiss: () => setPayInProgress(false),
         },
         theme: { color: "#9a2119" },
       };
       const rzp = new window.Razorpay(options);
+      rzp.on("payment.failed", (failure) => {
+        setPaymentNotice(
+          failure?.error?.description || "Payment failed. Please try again or use a different payment method."
+        );
+        setPayInProgress(false);
+      });
+      checkoutOpened = true;
       rzp.open();
     } catch (err) {
-      console.log("FULL ERROR", err);
       const message = err?.response?.status === 409
         ? "This time slot is already booked. Please choose another time slot."
         : err?.response?.data?.message || err?.message || "Booking payment failed. Please try again.";
@@ -586,6 +656,8 @@ export default function BookMentorPage() {
           setBookedSlotsLoading(false);
         }
       }
+    } finally {
+      if (!checkoutOpened) setPayInProgress(false);
     }
   };
 
@@ -649,6 +721,7 @@ export default function BookMentorPage() {
             type="button"
             className="mt-6 rounded-[16px] bg-[#9a2119] px-6 py-3 text-sm font-extrabold text-white"
             onClick={() => {
+              clearMentorStepSnapshot();
               setBooked(false);
               setSelectedMentorId("");
               setSelectedMentor(null);
@@ -780,7 +853,7 @@ export default function BookMentorPage() {
             ₹
           </span>
           <span className="whitespace-nowrap text-[15px]">
-            {String(activeMentor.price || "").replace(/^rs\.?\s*/i, "")}
+            {String(activeMentor.price || "").replace(/^(rs\.?|₹)\s*/i, "")}
           </span>
         </span>
           
@@ -820,6 +893,9 @@ export default function BookMentorPage() {
 
       <div className="mt-5 rounded-[24px] border border-[#f0e4e2] bg-white p-5">
         <div className="text-[13px] font-bold text-[#1a0a09]">Select Date</div>
+        {!dates.length ? (
+          <div className="mt-3 text-sm text-[#8c6c67]">No slots available for this mentor right now.</div>
+        ) : null}
         <div className="mt-3 flex flex-wrap gap-2.5">
           {dates.map((date) => {
             const isActive = selectedDate === date.key;
@@ -904,7 +980,7 @@ export default function BookMentorPage() {
 
       <button
         type="button"
-        disabled={!selectedDate || !selectedSlot || bookedSlotsLoading || Boolean(bookedSlotsError)}
+        disabled={!selectedDate || !selectedSlot || bookedSlotsLoading || Boolean(bookedSlotsError) || payInProgress}
         onClick={handlePayment}
         className="mt-5 w-full rounded-[18px] py-3.5 text-[14px] font-extrabold text-white shadow-md disabled:cursor-not-allowed disabled:opacity-40"
         style={{ background: "linear-gradient(90deg, #c72733 0%, #51154c 100%)" }}
@@ -932,7 +1008,7 @@ export default function BookMentorPage() {
                        prose-td:border prose-td:border-line prose-td:p-2
                        prose-th:border prose-th:border-line prose-th:p-2
                        prose-blockquote:border-l-brand prose-blockquote:text-ink"
-     dangerouslySetInnerHTML={{ __html: activeMentor.descriptionHtml || "" }}     />
+     dangerouslySetInnerHTML={{ __html: sanitizeHtml(activeMentor.descriptionHtml || "") }}     />
         </SectionCard>
 
         <SectionCard title="Mentor Details">

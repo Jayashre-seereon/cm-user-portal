@@ -1,20 +1,19 @@
 import { EyeInvisibleOutlined, EyeTwoTone, LockOutlined } from "@ant-design/icons";
 import { Alert, Button, Form, Input, Space } from "antd";
 import { useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { getApiErrorMessage, resetPassword } from "../../../api/authApi";
-import { isValidPassword } from "../../../utils/auth";
+import { isStrongPassword, PASSWORD_POLICY_MESSAGE } from "../../../utils/auth";
 import { AuthShell } from "../components/AuthShell";
 import { authPrimaryButtonStyle } from "../components/authShared";
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
   const params = useParams();
-  const [searchParams] = useSearchParams();
   const [form] = Form.useForm();
   const [status, setStatus] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const token = params.token || searchParams.get("token") || searchParams.get("resetToken") || "";
+  const token = String(params.token || "").trim();
 
   async function handleSubmit(values) {
     if (!token) {
@@ -64,13 +63,14 @@ export default function ResetPasswordPage() {
           <Form.Item
             label="New Password"
             name="newPassword"
+            extra={PASSWORD_POLICY_MESSAGE}
             rules={[
               { required: true, message: "Please enter a new password." },
               {
                 validator: (_, value) =>
-                  !value || isValidPassword(value)
+                  !value || isStrongPassword(value)
                     ? Promise.resolve()
-                    : Promise.reject(new Error("Password must be at least 6 characters.")),
+                    : Promise.reject(new Error(PASSWORD_POLICY_MESSAGE)),
               },
             ]}
           >
@@ -127,6 +127,14 @@ export default function ResetPasswordPage() {
         </Form>
 
         {status ? <Alert type={status.type} message={status.message} showIcon style={{ borderRadius: "10px" }} /> : null}
+
+        {!token || status?.type === "error" ? (
+          <div style={{ textAlign: "center", fontSize: "13px" }}>
+            <Link to="/forgot-password" style={{ color: "#9a2119", fontWeight: 700 }}>
+              Request a new reset link
+            </Link>
+          </div>
+        ) : null}
       </Space>
     </AuthShell>
   );

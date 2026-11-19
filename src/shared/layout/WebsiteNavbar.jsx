@@ -80,7 +80,7 @@ export default function WebsiteNavbar() {
         // Fall back to local logout even if the backend logout fails.
       } finally {
         logout();
-        navigate("/auth-entry");
+        navigate("/auth-entry", { replace: true });
       }
     }
   }
@@ -275,7 +275,7 @@ export default function WebsiteNavbar() {
                       // Fall back to local logout even if the backend logout fails.
                     } finally {
                       logout();
-                      navigate("/auth-entry");
+                      navigate("/auth-entry", { replace: true });
                     }
                   }
                 },

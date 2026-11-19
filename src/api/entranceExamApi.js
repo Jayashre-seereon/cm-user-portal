@@ -1,5 +1,6 @@
 import api from "./axios";
 
+import { formatDate as formatSharedDate } from "../utils/format";
 function stripHtml(value) {
   if (!value) {
     return "";
@@ -33,11 +34,7 @@ function formatDate(value) {
     return value;
   }
 
-  return parsedDate.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  return formatSharedDate(parsedDate);
 }
 
 function formatSubjects(subjects) {

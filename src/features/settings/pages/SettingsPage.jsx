@@ -13,8 +13,9 @@ import { usePortalNavigation } from "../../portal/components/portalPageShared";
 import { PageHero, SectionCard, SoftTag } from "../../../components/ui";
 import { changeUserPassword, createHelpRequest } from "../../../api/userApi";
 import { getApiErrorMessage, logoutUser } from "../../../api/authApi";
-import { isValidEmail, isValidPassword } from "../../../utils/auth";
+import { isValidEmail, isStrongPassword, PASSWORD_POLICY_MESSAGE } from "../../../utils/auth";
 import { useLocation } from "react-router-dom";
+import { useAuthStore } from "../../../store/authStore";
 
 function SettingAction({ icon, title, description, onClick, cta = "Open" }) {
   return (
@@ -62,8 +63,8 @@ export default function SettingsPage() {
   const currentPasswordError = passwordForm.currentPassword && !passwordForm.currentPassword.trim()
     ? "Enter your current password."
     : "";
-  const newPasswordError = passwordForm.newPassword && !isValidPassword(passwordForm.newPassword)
-    ? "New password must be at least 6 characters."
+  const newPasswordError = passwordForm.newPassword && !isStrongPassword(passwordForm.newPassword)
+    ? PASSWORD_POLICY_MESSAGE
     : "";
   const confirmPasswordError =
     passwordForm.confirmPassword && passwordForm.newPassword !== passwordForm.confirmPassword
@@ -71,7 +72,7 @@ export default function SettingsPage() {
       : "";
   const canSavePassword =
     passwordForm.currentPassword.trim() &&
-    isValidPassword(passwordForm.newPassword) &&
+    isStrongPassword(passwordForm.newPassword) &&
     passwordForm.newPassword === passwordForm.confirmPassword &&
     !isSavingPassword;
 
@@ -109,8 +110,8 @@ export default function SettingsPage() {
       return;
     }
 
-    if (!isValidPassword(passwordForm.newPassword)) {
-      setStatus({ type: "error", message: "New password must be at least 6 characters." });
+    if (!isStrongPassword(passwordForm.newPassword)) {
+      setStatus({ type: "error", message: PASSWORD_POLICY_MESSAGE });
       return;
     }
 
@@ -123,6 +124,13 @@ export default function SettingsPage() {
       setIsSavingPassword(true);
       setStatus(null);
       const response = await changeUserPassword(passwordForm);
+      // Other sessions are signed out by the server; keep this one with the fresh tokens.
+      if (response?.accessToken && response?.refreshToken) {
+        useAuthStore.getState().updateAuthSession({
+          accessToken: response.accessToken,
+          refreshToken: response.refreshToken,
+        });
+      }
       setStatus({
         type: "success",
         message: response?.message || "Password changed successfully.",
@@ -246,7 +254,7 @@ export default function SettingsPage() {
               <SoftTag color="volcano">Security</SoftTag>
               <h3 className="mt-4 text-lg font-black text-ink">Password tips</h3>
               <ul className="mt-3 space-y-3 text-sm leading-6 text-muted">
-                <li>Use at least 6 characters.</li>
+                <li>Use at least 8 characters with a letter and a number.</li><li>Changing it signs you out on other devices.</li>
                 <li>Keep it different from your mobile OTP code.</li>
                 <li>Change it whenever you feel your account needs a refresh.</li>
               </ul>
@@ -275,6 +283,7 @@ export default function SettingsPage() {
                   <Form.Item label="Your Email">
                     <Input
                       value={helpForm.email}
+                      readOnly={Boolean(userProfile.email)}
                       onChange={(event) => setHelpForm((current) => ({ ...current, email: event.target.value }))}
                       className="!rounded-xl !h-11"
                     />
@@ -285,6 +294,7 @@ export default function SettingsPage() {
                   <Form.Item label="Subject">
                     <Input
                       value={helpForm.subject}
+                      maxLength={120}
                       onChange={(event) => setHelpForm((current) => ({ ...current, subject: event.target.value }))}
                       className="!rounded-xl !h-11"
                     />
@@ -295,6 +305,8 @@ export default function SettingsPage() {
                     <Input.TextArea
                       rows={6}
                       value={helpForm.message}
+                      maxLength={2000}
+                      showCount
                       onChange={(event) => setHelpForm((current) => ({ ...current, message: event.target.value }))}
                       className="!rounded-2xl"
                     />
@@ -366,7 +378,7 @@ export default function SettingsPage() {
                 // Fall back to local logout even if the backend logout fails.
               } finally {
                 logout();
-                navigate("/auth-entry");
+                navigate("/auth-entry", { replace: true });
               }
             }}
           />

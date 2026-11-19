@@ -31,7 +31,7 @@ export function DashboardHeroSection({ onTestClick, userName }) {
                         size="large"
                         icon={<ExperimentOutlined />}
                         className="dashboard-hero-button !h-12 !rounded-[10px] !border-0 !bg-white !px-5 !font-semibold !text-[#321a15] sm:!min-w-[240px] md:!min-w-[260px]"
-                       onClick={() => window.location.href = "/assessment/phycometrichalftest.html"}
+                       onClick={() => window.open("/assessment/phycometrichalftest.html", "_blank", "noopener")}
                     >
                        Take The Free Personality Test 
                     </Button>

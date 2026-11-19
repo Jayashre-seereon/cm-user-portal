@@ -31,6 +31,7 @@ import {
   TOTAL_ASSESSMENT_QUESTIONS,
 } from "../data/assessmentConstants";
 
+import { formatDate as formatSharedDate } from "../../../utils/format";
 export default function AssessmentLandingPage() {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
@@ -76,7 +77,10 @@ export default function AssessmentLandingPage() {
 
       // Find in-progress attempt if any
       const inProgress = attempts.find(
-        (a) => a.status === "in_progress" || a.status === "IN_PROGRESS" || a.isCompleted === false
+        (a) =>
+          a.status === "in_progress" ||
+          a.status === "IN_PROGRESS" ||
+          (a.isCompleted === false && !a.completedAt && !a.report && !/completed/i.test(String(a.status || "")))
       );
       setActiveAttempt(inProgress || null);
 
@@ -85,7 +89,14 @@ export default function AssessmentLandingPage() {
         (a) => a.status === "completed" || a.status === "COMPLETED" || a.isCompleted === true || a.report
       );
       if (completed.length > 0) {
-        setLatestCompletedAttempt(completed[0]);
+        const timeOf = (a) => {
+          const t = new Date(a.completedAt || a.updatedAt || a.createdAt || 0).getTime();
+          return Number.isNaN(t) ? 0 : t;
+        };
+        const sorted = [...completed].sort(
+          (a, b) => timeOf(b) - timeOf(a) || Number(b.id || b.attemptId || 0) - Number(a.id || a.attemptId || 0)
+        );
+        setLatestCompletedAttempt(sorted[0]);
       }
     } catch (err) {
       console.error("Error loading assessment landing data:", err);
@@ -148,15 +159,28 @@ export default function AssessmentLandingPage() {
       return;
     }
 
+    // Access status could not be verified (API failed): do not start blindly
+    if (!accessStatus) {
+      message.error("Could not verify your assessment access. Please refresh and try again.");
+      loadData();
+      return;
+    }
+
     try {
       setStarting(true);
       const defaultAssessment = publishedAssessments[0] || {};
-      const assessmentId =
-        defaultAssessment.id || defaultAssessment._id || defaultAssessment.assessmentId || "default";
+      const assessmentId = defaultAssessment.id || defaultAssessment._id || defaultAssessment.assessmentId;
+      if (!assessmentId) {
+        message.error("No assessment is available right now. Please try again later.");
+        return;
+      }
 
       const res = await startAssessmentAttempt(assessmentId);
-      const attemptId =
-        res?.attemptId || res?.id || res?.data?.attemptId || res?.data?.id || `att_${Date.now()}`;
+      const attemptId = res?.attemptId || res?.id || res?.data?.attemptId || res?.data?.id;
+      if (!attemptId) {
+        message.error("Could not start the assessment. Please try again.");
+        return;
+      }
 
       message.success("Assessment initialized! Best of luck.");
       navigate(`/app/assessment/attempt/${attemptId}`);
@@ -226,13 +250,13 @@ export default function AssessmentLandingPage() {
     latestCompletedAttempt?.id ||
     latestCompletedAttempt?.attemptId ||
     latestCompletedAttempt?._id ||
-    "latest";
+    null;
 
   const formattedCompletedDate =
     accessStatus?.completedAt || latestCompletedAttempt?.completedAt
-      ? new Date(
+      ? formatSharedDate(new Date(
           accessStatus?.completedAt || latestCompletedAttempt?.completedAt
-        ).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+        ))
       : "Recently";
 
   return (
@@ -333,6 +357,7 @@ export default function AssessmentLandingPage() {
                         type="primary"
                         size="large"
                         onClick={() => navigate(`/app/assessment/attempt/${completedAttemptId}/result`)}
+                        disabled={!completedAttemptId}
                         className="h-11 w-full rounded-xl border-none bg-emerald-400 font-extrabold text-slate-900 shadow-md hover:bg-emerald-300"
                       >
                         📄 View Career Compass Report
@@ -547,11 +572,7 @@ export default function AssessmentLandingPage() {
                       attempt.status === "completed" || attempt.status === "COMPLETED" || attempt.isCompleted;
                     const dateStr = attempt.completedAt || attempt.createdAt || attempt.updatedAt;
                     const formattedDate = dateStr
-                      ? new Date(dateStr).toLocaleDateString("en-IN", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })
+                      ? formatSharedDate(new Date(dateStr))
                       : `Attempt #${index + 1}`;
 
                     return (

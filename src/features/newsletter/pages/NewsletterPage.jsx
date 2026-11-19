@@ -164,7 +164,7 @@ const filteredItems = useMemo(() => {
     ? candidates
     : candidates.filter((item) => item.type?.toUpperCase() === selectedType);
   if (selectedId) {
-    return filtered.sort((a, b) => {
+    return [...filtered].sort((a, b) => {
       if (String(a.id) === String(selectedId)) return -1;
       if (String(b.id) === String(selectedId)) return 1;
       return 0;
@@ -172,6 +172,17 @@ const filteredItems = useMemo(() => {
   }
   return filtered;
 }, [items, selectedType, pageLocation.search, pageLocation.state]);
+const deepLinkNotFound = useMemo(() => {
+  if (!items.length) return false;
+  const params = new URLSearchParams(pageLocation.search);
+  const selectedId = params.get("newsletterId");
+  const selectedTitle = String(params.get("title") || pageLocation.state?.searchItem?.title || "").trim().toLocaleLowerCase();
+  if (!selectedId && !selectedTitle) return false;
+  return !items.some((item) =>
+    (selectedId && String(item.id) === String(selectedId)) ||
+    (selectedTitle && String(item.title || "").trim().toLocaleLowerCase() === selectedTitle)
+  );
+}, [items, pageLocation.search, pageLocation.state]);
   // Always resolve access live from the API — the passed-in accessStatus is only
   // a starting guess for the very first render, never a substitute for the real check.
   useEffect(() => {
@@ -285,6 +296,9 @@ const filteredItems = useMemo(() => {
     </button>
   ))}
 </div>
+{deepLinkNotFound ? (
+  <Alert type="info" showIcon className="mb-4" message="The requested newsletter was not found. Showing all newsletters." />
+) : null}
    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
  {filteredItems.length > 0 ? (
   filteredItems.map((item, index) => (

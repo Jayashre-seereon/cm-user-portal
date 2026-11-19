@@ -9,9 +9,11 @@ import { ModuleScreen, PageHero } from "../../../components/ui";
 import { useAppState } from "../../../state/AppStateContext";
 import { usePortalNavigation } from "../../portal/components/portalPageShared";
 import { loadRazorpayScript } from "../../../utils/razorpay.js";
+import { sanitizeHtml } from "../../../utils/sanitizeHtml";
+import { formatCurrency as formatSharedCurrency } from "../../../utils/format";
 
 export default function SubscriptionPage() {
-  const { activePlanIds, activatePlan, refreshUserData } = useAppState();
+  const { activePlanIds, refreshUserData } = useAppState();
   const { navigate } = usePortalNavigation();
   const [params] = useSearchParams();
   const returnTo = params.get("returnTo");
@@ -29,7 +31,7 @@ export default function SubscriptionPage() {
         const [plansRes, assessRes, subsRes] = await Promise.allSettled([
           getPlans(),
           getAssessmentAccessStatus(),
-          getSubscriptions(),
+          getSubscriptions({ force: true }),
         ]);
 
         if (plansRes.status === "fulfilled" && Array.isArray(plansRes.value)) {
@@ -77,6 +79,7 @@ export default function SubscriptionPage() {
 
   // Handle payment button click
   const handleSelectPlan = async (planId, planObj) => {
+    if (processingPlanId !== null) return;
     try {
       setProcessingPlanId(planId);
 
@@ -119,17 +122,19 @@ export default function SubscriptionPage() {
             if (typeof refreshUserData === "function") {
               await refreshUserData();
             }
-            if (typeof activatePlan === "function") {
-              activatePlan(planId);
-            }
 
             const targetReturn = returnTo || (hasAssessmentModule ? "/app/assessment" : "/app/dashboard");
             navigate(
-              `/payment-success?planId=${planId}&transactionId=${response.razorpay_payment_id}&returnTo=${encodeURIComponent(targetReturn)}`
+              `/payment-success?planId=${planId}&transactionId=${response.razorpay_payment_id}&returnTo=${encodeURIComponent(targetReturn)}`,
+              { replace: true }
             );
           } catch (vErr) {
             console.error("Payment verification error:", vErr);
-            message.error({ content: "Payment received. Please refresh or contact support if plan is not active.", key: "payment-verify" });
+            message.error({
+              content: `Payment received but your plan could not be activated. Please refresh, or contact support with payment id ${response?.razorpay_payment_id || "(unavailable)"}.`,
+              key: "payment-verify",
+              duration: 10,
+            });
           } finally {
             setProcessingPlanId(null);
           }
@@ -142,6 +147,10 @@ export default function SubscriptionPage() {
       };
 
       const rzp = new window.Razorpay(options);
+      rzp.on("payment.failed", function (failure) {
+        message.error(failure?.error?.description || "Payment failed. Please try again.");
+        setProcessingPlanId(null);
+      });
       rzp.open();
     } catch (err) {
       console.error("Payment initiation error:", err);
@@ -305,7 +314,7 @@ export default function SubscriptionPage() {
                     </div>
 
                     <div className="flex items-baseline gap-1">
-                      <span className="text-3xl font-black text-brand">₹{plan.price}</span>
+                      <span className="text-3xl font-black text-brand">{formatSharedCurrency(plan.price) || `₹${plan.price}`}</span>
                       <span className="text-muted text-[10px] font-medium">/{plan.validity}</span>
                     </div>
 
@@ -322,7 +331,7 @@ export default function SubscriptionPage() {
                                    prose-th:border prose-th:border-line prose-th:p-2
                                    prose-blockquote:border-l-brand
                                    [&_*]:!text-[12px]"
-                        dangerouslySetInnerHTML={{ __html: plan.descriptionHtml }}
+                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(plan.descriptionHtml) }}
                       />
                     ) : null}
                   </div>
@@ -349,6 +358,7 @@ export default function SubscriptionPage() {
                       block
                       type="primary"
                       loading={isProcessingThis}
+                      disabled={processingPlanId !== null && !isProcessingThis}
                       icon={buttonIcon}
                       size="large"
                       className="!h-11 !rounded-xl !text-sm !font-bold transition-transform active:scale-95 shadow-md !bg-[#9a2119] hover:!bg-[#821811] !border-none"

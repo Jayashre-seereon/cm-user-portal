@@ -17,6 +17,7 @@ import { usePortalNavigation } from "../../portal/components/portalPageShared";
 import { DashboardHeroSection } from "../../portal/components/DashboardHeroSection";
 import { ExploreModulesSection } from "../../portal/components/ExploreModulesSection";
 import { PersonalityQuizQuestion, PersonalityQuizResults } from "../../portal/components/PersonalityQuizSections";
+import { formatCurrency as formatSharedCurrency } from "../../../utils/format";
 
 function parseDateForReview(value) {
   if (!value) {
@@ -760,7 +761,7 @@ export default function DashboardPage() {
           {/* Price */}
           <div className="mt-3 flex items-end gap-1">
             <span className="text-2xl font-extrabold text-brand">
-              ₹{plan.price}
+              {formatSharedCurrency(plan.price) || `₹${plan.price}`}
             </span>
             <span className="text-xs text-muted mb-1">/plan</span>
           </div>
