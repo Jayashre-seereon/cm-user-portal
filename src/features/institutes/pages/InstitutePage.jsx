@@ -10,7 +10,7 @@ import {
 } from "@ant-design/icons";
 import { State } from "country-state-city";
 
-import { getInstitutes, getCategories } from "../../../api/instituteApi";
+import { getInstitutes, getCategories, getInstituteFilters } from "../../../api/instituteApi";
 import { globalSearch } from "../../../api/searchApi";
 import { institutes as fallbackInstitutes } from "../../../data/careermapData";
 import { ModuleScreen, PageHero } from "../../../components/ui";
@@ -74,6 +74,8 @@ export default function InstitutePage() {
   const [categories, setCategories] = useState([]);
   const [country, setCountry] = useState("");
   const [stateFilter, setStateFilter] = useState("");
+  // Options that are valid for the current selection (null until loaded / if the request fails)
+  const [facets, setFacets] = useState(null);
   const [type, setType] = useState("");
 
   const [unlockModalItem, setUnlockModalItem] = useState(null);
@@ -293,13 +295,26 @@ export default function InstitutePage() {
 
   /*
    * ============================================================
-   * COUNTRY CHANGE
+   * FILTER OPTIONS
+   * Every dropdown only offers values that still have institutes for the
+   * OTHER selected filters, so category / country / state / type can be
+   * chosen in any order and the lists are always correct.
    * ============================================================
    */
   useEffect(() => {
-    setStateFilter("");
-    setPage(1);
-  }, [country]);
+    let active = true;
+    getInstituteFilters({ category, country, state: stateFilter, type })
+      .then((result) => {
+        if (active) setFacets(result);
+      })
+      .catch((err) => {
+        console.error("Failed to load institute filter options:", err);
+        if (active) setFacets(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [category, country, stateFilter, type]);
 
   /*
    * ============================================================
@@ -307,11 +322,18 @@ export default function InstitutePage() {
    * ============================================================
    */
   const categoryOptions = useMemo(() => {
+    if (facets) {
+      const list = facets.categories.map((cat) => ({ value: cat.title, label: cat.title }));
+      if (category && !list.some((opt) => opt.value.toLowerCase() === category.toLowerCase())) {
+        list.push({ value: category, label: category });
+      }
+      return list;
+    }
     return categories.map((cat) => ({
       value: cat.title || cat.name || String(cat.id),
       label: cat.title || cat.name || String(cat.id),
     }));
-  }, [categories]);
+  }, [categories, facets, category]);
 
   /*
    * ============================================================
@@ -405,6 +427,11 @@ export default function InstitutePage() {
    * ============================================================
    */
   const countryOptions = useMemo(() => {
+    if (facets) {
+      const names = facets.countries.map((c) => c.country);
+      if (country && !names.includes(country)) names.push(country);
+      return names;
+    }
     const list = [
       ...new Set(
         items
@@ -417,7 +444,7 @@ export default function InstitutePage() {
     ];
 
     return list;
-  }, [items]);
+  }, [items, facets, country]);
 
   /*
    * ============================================================
@@ -433,6 +460,14 @@ export default function InstitutePage() {
    * ============================================================
    */
   const stateOptions = useMemo(() => {
+    if (facets) {
+      const list = facets.states.map((s) => ({ value: s.state, label: s.state }));
+      if (stateFilter && !list.some((opt) => opt.value === stateFilter)) {
+        list.push({ value: stateFilter, label: stateFilter });
+      }
+      return list;
+    }
+
     if (!country) return [];
 
     if (country.toLowerCase() === "india") {
@@ -463,7 +498,7 @@ export default function InstitutePage() {
       value: s,
       label: s,
     }));
-  }, [items, country]);
+  }, [items, country, facets, stateFilter]);
 
   /*
    * ============================================================
@@ -476,16 +511,19 @@ export default function InstitutePage() {
    * current API response contains only Government records.
    * ============================================================
    */
-  const typeOptions = [
-    {
-      value: "Government",
-      label: "Government",
-    },
-    {
-      value: "Private",
-      label: "Private",
-    },
-  ];
+  const typeOptions = useMemo(() => {
+    if (facets) {
+      const list = facets.types.map((t) => ({ value: t.type, label: t.type }));
+      if (type && !list.some((opt) => opt.value.toLowerCase() === type.toLowerCase())) {
+        list.push({ value: type, label: type });
+      }
+      return list;
+    }
+    return [
+      { value: "Government", label: "Government" },
+      { value: "Private", label: "Private" },
+    ];
+  }, [facets, type]);
 
   /*
    * ============================================================
@@ -495,7 +533,6 @@ export default function InstitutePage() {
   function handleCountryChange(value) {
     exitGlobalSearchSelection();
     setCountry(value?.toLowerCase() || "");
-    setStateFilter("");
     setPage(1);
   }
 
@@ -631,7 +668,6 @@ export default function InstitutePage() {
           value={stateFilter || undefined}
           onChange={handleStateChange}
           options={stateOptions}
-          disabled={!country}
           style={{ minWidth: 160 }}
           className="pill-select"
         />

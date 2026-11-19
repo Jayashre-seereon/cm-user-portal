@@ -205,6 +205,33 @@ export async function getInstitutes({
   };
 }
 
+/*
+| Valid options for every institute filter, given what is already selected.
+| Each list ignores its own selection but applies all the others, so the filters
+| work in any order (category -> state -> type, or type -> state -> category...).
+*/
+export async function getInstituteFilters({
+  category = "",
+  country = "",
+  state = "",
+  type = "",
+} = {}) {
+  const params = new URLSearchParams();
+  if (category && category !== "all") params.append("category", category);
+  if (country && country !== "all") params.append("country", country);
+  if (state && state !== "all") params.append("state", state);
+  if (type && type !== "all") params.append("type", type);
+
+  const response = await api.get(`/careerlibrary/institutions/filters?${params.toString()}`);
+  const data = response?.data || {};
+  return {
+    categories: Array.isArray(data.categories) ? data.categories : [],
+    countries: Array.isArray(data.countries) ? data.countries : [],
+    states: Array.isArray(data.states) ? data.states : [],
+    types: Array.isArray(data.types) ? data.types : [],
+  };
+}
+
 export const fetchInstitutions = getInstitutes;
 
 export const getCategories = async () => {
