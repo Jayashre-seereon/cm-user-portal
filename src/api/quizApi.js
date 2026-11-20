@@ -72,3 +72,8 @@ export async function submitQuiz(payload) {
   const response = await api.post("/quiz/submit-quiz", payload);
   return response?.data?.data || null;
 }
+
+export async function getQuizAttemptResult(attemptId) {
+  const response = await api.get(`/quiz/attempt/${attemptId}/result`);
+  return response?.data?.data || null;
+}
