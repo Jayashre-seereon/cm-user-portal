@@ -74,9 +74,7 @@ export default function SignupPage() {
       setIsSubmitting(true);
       setStatus(null);
       const otpResponse = await sendSignupOtp(otpMobile);
-      const visibleOtp = import.meta.env.VITE_SHOW_OTP === "true"
-        ? (otpResponse?.otp || otpResponse?.data?.otp)
-        : undefined;
+      const visibleOtp = otpResponse?.otp || otpResponse?.data?.otp;
       setSignupForm({
         ...form,
         mobile: normalizeMobile(form.mobile),
