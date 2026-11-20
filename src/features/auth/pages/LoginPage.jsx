@@ -83,23 +83,25 @@ export default function LoginPage() {
 
       if (isExistingUser) {
         const loginOtpResponse = await sendOtp(formattedMobile, "login");
-        // Dev-only helper: never expose the OTP in production builds
-        const devOtp = import.meta.env.DEV ? (loginOtpResponse?.otp || loginOtpResponse?.data?.otp) : undefined;
+        const visibleOtp = import.meta.env.VITE_SHOW_OTP === "true"
+          ? (loginOtpResponse?.otp || loginOtpResponse?.data?.otp)
+          : undefined;
         navigate(
           `/otp-verify?next=${encodeURIComponent(destination)}&identifier=${encodeURIComponent(formattedMobile)}&otpType=login`,
-          { state: { devOtp } }
+          { state: { devOtp: visibleOtp } }
         );
         return;
       }
 
       const signupOtpResponse = await sendOtp(formattedMobile, "signup");
-      // Dev-only helper: never expose the OTP in production builds
-      const devOtpSignup = import.meta.env.DEV ? (signupOtpResponse?.otp || signupOtpResponse?.data?.otp) : undefined;
+      const visibleSignupOtp = import.meta.env.VITE_SHOW_OTP === "true"
+        ? (signupOtpResponse?.otp || signupOtpResponse?.data?.otp)
+        : undefined;
       setOnboardingData(onboarding);
       setSignupForm({ mobile: normalizedMobile });
       navigate(
         `/otp-verify?next=${encodeURIComponent("/profile-setup")}&identifier=${encodeURIComponent(formattedMobile)}&otpType=signup`,
-        { state: { devOtp: devOtpSignup } }
+        { state: { devOtp: visibleSignupOtp } }
       );
     
     } catch (error) {
