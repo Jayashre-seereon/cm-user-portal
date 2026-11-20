@@ -27,6 +27,8 @@ import { checkModuleAccess } from "../../api/moduleAccessApi";
 import { UnlockRedirectModal } from "../../features/portal/components/portalPageShared";
 import { useAppState } from "../../state/AppStateContext";
 import { buildDashboardModules } from "../../utils/dashboard";
+import { getDisplayName } from "../../utils/auth";
+import { useAuthStore } from "../../store/authStore";
 import BrandMark from "../branding/BrandMark";
 import GlobalSearchBar from "./GlobalSearchBar";
 
@@ -52,6 +54,7 @@ export default function WebsiteNavbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [lockedModule, setLockedModule] = useState(null);
   const { unreadNotificationsCount, userProfile, logout, notifications, dashboardData } = useAppState();
+  const authUser = useAuthStore((state) => state.user);
   const previewNotifications = (notifications || []).slice(0, 3);
 
   const moduleMenu = {
@@ -290,7 +293,7 @@ export default function WebsiteNavbar() {
                   style={{ backgroundColor: "#9a2119", borderRadius: 6 }}
                 />
                 <span className="hidden text-[13px] font-medium text-[#2e1f28] md:inline">
-                  {userProfile?.name || "demo2026"}
+                  {getDisplayName(userProfile, authUser)}
                 </span>
                 <DownOutlined className="text-[11px] text-[#9b8f97]" />
               </button>

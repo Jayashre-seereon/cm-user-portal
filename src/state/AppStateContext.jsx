@@ -4,6 +4,7 @@ import { useAuthStore } from "../store/authStore";
 import { getNotifications } from "../api/notificationApi";
 import { getMentorBookings, getSubscriptions, getTestHistory } from "../api/profile";
 import { formatCurrency, formatDate as formatSharedDate } from "../utils/format";
+import { mapApiUserToProfile, mergeServerProfile } from "../utils/auth";
 
 const STORAGE_KEY = "careermap-userportal-state";
 const emptyUserProfile = {
@@ -372,7 +373,15 @@ export function AppStateProvider({ children }) {
       try {
         const response = await getDashboard();
         if (active && response?.success) {
-          setState((current) => ({ ...current, dashboardData: response.data || null }));
+          // The dashboard carries the signed-in user's saved record. Load the profile (name,
+          // email, ...) from it, so it never depends on a copy kept in this browser, which is
+          // empty after a reload, a cleared cache or a different browser.
+          const serverProfile = mapApiUserToProfile(response.data?.user);
+          setState((current) => ({
+            ...current,
+            dashboardData: response.data || null,
+            userProfile: mergeServerProfile(current.userProfile, serverProfile),
+          }));
         }
       } catch {
         if (active) {
@@ -641,6 +650,9 @@ export function AppStateProvider({ children }) {
           setState((current) => ({
             ...current,
             dashboardData: dashboardResponse?.success ? dashboardResponse.data : current.dashboardData,
+            userProfile: dashboardResponse?.success
+              ? mergeServerProfile(current.userProfile, mapApiUserToProfile(dashboardResponse.data?.user))
+              : current.userProfile,
             testHistory: normalizeTestHistoryItems(testItems),
             bookings: normalizeBookingItems(bookingItems),
             subscriptionRecords: normalizeSubscriptionItems(userSubscriptions),

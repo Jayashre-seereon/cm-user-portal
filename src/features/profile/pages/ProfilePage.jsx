@@ -16,6 +16,7 @@ import { updateUserProfile } from "../../../api/userApi";
 import { useAppState } from "../../../state/AppStateContext";
 import { usePortalNavigation } from "../../portal/components/portalPageShared";
 import { isValidDateInput, mapApiUserToProfile, splitFullName } from "../../../utils/auth";
+import { useAuthStore } from "../../../store/authStore";
 import { useLocation } from "react-router-dom";
 import dayjs from "dayjs";
 import { formatCurrency, formatDate, formatPhone } from "../../../utils/format";
@@ -65,8 +66,18 @@ export default function ProfilePage() {
     }
   }, [editOpen]);
 
-  const profileName = useMemo(() => userProfile.name || "Your profile", [userProfile.name]);
-  const profileEmail = useMemo(() => userProfile.email || "No email added yet", [userProfile.email]);
+  // The saved profile is loaded from the server; until it arrives, use the login session's
+  // name and email so a saved profile never reads as empty.
+  const authUser = useAuthStore((state) => state.user);
+  const sessionName = [authUser?.firstName, authUser?.lastName].filter(Boolean).join(" ").trim();
+  const profileName = useMemo(
+    () => userProfile.name || sessionName || "Your profile",
+    [userProfile.name, sessionName]
+  );
+  const profileEmail = useMemo(
+    () => userProfile.email || authUser?.email || "No email added yet",
+    [userProfile.email, authUser?.email]
+  );
   const dobError = form.dob && !dobToIso(form.dob) ? "Enter a valid date in DD-MM-YYYY format." : "";
   const canSaveProfile = !form.dob || Boolean(dobToIso(form.dob));
 

@@ -1250,6 +1250,33 @@ useEffect(() => {
 
         const normalizedType = String(type).toLowerCase();
 
+        // A link (global search, shared URL) must pass the same check as a click. In preview the
+        // server only starts a preview for categories marked free, so anything under a locked
+        // category opens the unlock prompt instead of an empty page - and the institute lists on
+        // it, which sit outside the content check, never show.
+        const access = await checkModuleAccess(CAREER_LIBRARY_MODULE_ID).catch(() => null);
+        if (!active) return;
+        if (access && access.allowed === false) {
+          setUnlockModalItem({
+            item: searchItem || { id, title, name: title },
+            type: normalizedType,
+            stay: true,
+          });
+          return;
+        }
+        if (access?.allowed) setModuleStatus(access.mode);
+        const inPreview = access?.allowed ? access.mode === "preview" : moduleStatus === "preview";
+
+        // Returns { ok, sessionId }. ok:false means it is locked (the prompt is already shown).
+        async function previewGate(pageType, pageId) {
+          if (!inPreview) return { ok: true, sessionId: undefined };
+          const gateItem = searchItem || { id: pageId, title, name: title };
+          // The prompt (opened by createPreviewSession when the server refuses) takes this shape.
+          const promptItem = { item: gateItem, type: pageType, stay: true };
+          const sessionId = await createPreviewSession(pageType, pageId, promptItem, { force: true });
+          return sessionId ? { ok: true, sessionId } : { ok: false };
+        }
+
         // 1. Subcategory / Career Detail (Direct inner detail view)
         if (
           normalizedType === "subcategory" ||
@@ -1262,9 +1289,28 @@ useEffect(() => {
           const targetId = id || searchParams.get("subCategoryId");
           let detailData = null;
 
+          // Gate on this career's own page; for a career path (which carries its parents' ids)
+          // use the deepest known parent - the free/locked decision is per category anyway.
+          let gateType = "sub";
+          let gateId = targetId;
+          if (normalizedType === "careerpath" || normalizedType === "career") {
+            const parentSubId = searchParams.get("subCategoryId") || searchItem?.subCategoryId || "";
+            if (parentSubId) {
+              gateId = parentSubId;
+            } else if (secondCategoryId) {
+              gateType = "second";
+              gateId = secondCategoryId;
+            } else if (categoryId) {
+              gateType = "category";
+              gateId = categoryId;
+            }
+          }
+          const gated = await previewGate(gateType, gateId);
+          if (!gated.ok || !active) return;
+
           if (targetId) {
             try {
-              const res = await getCareerLibraryDetails(targetId, CAREER_LIBRARY_MODULE_ID);
+              const res = await getCareerLibraryDetails(targetId, CAREER_LIBRARY_MODULE_ID, gated.sessionId);
               detailData = res?.data || res;
             } catch (e) {
               console.warn("Direct getCareerLibraryDetails error, fallback to general:", e);
@@ -1293,7 +1339,9 @@ useEffect(() => {
           searchParams.get("secondCategoryId")
         ) {
           const targetId = id || searchParams.get("secondCategoryId");
-          const nextRes = await getCareerLibraryNext("second", targetId, CAREER_LIBRARY_MODULE_ID);
+          const gated = await previewGate("second", targetId);
+          if (!gated.ok || !active) return;
+          const nextRes = await getCareerLibraryNext("second", targetId, CAREER_LIBRARY_MODULE_ID, gated.sessionId);
           if (!active) return;
 
           const data = nextRes ?? {};
@@ -1320,7 +1368,9 @@ useEffect(() => {
           searchParams.get("categoryId")
         ) {
           const targetId = id || searchParams.get("categoryId");
-          const nextRes = await getCareerLibraryNext("category", targetId, CAREER_LIBRARY_MODULE_ID);
+          const gated = await previewGate("category", targetId);
+          if (!gated.ok || !active) return;
+          const nextRes = await getCareerLibraryNext("category", targetId, CAREER_LIBRARY_MODULE_ID, gated.sessionId);
           if (!active) return;
 
           const data = nextRes ?? {};
@@ -1365,7 +1415,9 @@ useEffect(() => {
         // Fallback: If generic search with ID, try fetching detail first
         if (id) {
           try {
-            const res = await getCareerLibraryDetails(id, CAREER_LIBRARY_MODULE_ID);
+            const gated = await previewGate("details", id);
+            if (!gated.ok || !active) return;
+            const res = await getCareerLibraryDetails(id, CAREER_LIBRARY_MODULE_ID, gated.sessionId);
             if (active && res?.data) {
               const sourceObj = searchItem || { id, title, name: title };
               setSelectedDetailSource(sourceObj);
@@ -1658,8 +1710,9 @@ useEffect(() => {
       setLoading(false);
     }
   }
-  async function createPreviewSession(pageType, pageId, item) {
-    if (moduleStatus !== "preview") {
+  async function createPreviewSession(pageType, pageId, item, { force = false } = {}) {
+    // `force` is for a deep link that has just checked the live access mode itself.
+    if (!force && moduleStatus !== "preview") {
       return null;
     }
 
@@ -1674,6 +1727,13 @@ useEffect(() => {
         pageType,
         pageId,
       });
+
+      // The server answers HTTP 200 with allowed:false when this content isn't free in preview
+      // (its category isn't marked free). Show the unlock prompt instead of silently doing nothing.
+      if (preview?.allowed === false) {
+        setUnlockModalItem(item);
+        return null;
+      }
 
       setPreviewSessionId(preview.previewSessionId);
       setPreviewRemaining(preview.remainingSeconds);
@@ -2370,8 +2430,9 @@ className="inline-flex h-10 w-10 items-center justify-center rounded-full border
         itemLabel={unlockModalItem ? getItemTitle(unlockModalItem.item) : ""}
         description="Your free Career Archive access has already been used. Subscribe to unlock"
         onCancel={() => {
+          const stayHere = unlockModalItem?.stay; // a blocked link: nothing was opened to go back from
           setUnlockModalItem(null);
-          handleBack();
+          if (!stayHere) handleBack();
         }}
         onConfirm={handleGoToPlans}
       />
