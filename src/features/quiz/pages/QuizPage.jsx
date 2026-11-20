@@ -14,10 +14,10 @@ import {
    LockOutlined,
   UnlockOutlined,
 } from "@ant-design/icons";
-import { Alert } from "antd";
+import { Alert, Button } from "antd";
 import { ModuleScreen, PageHero } from "../../../components/ui";
 import { quizCatalog as fallbackQuizCatalog, sampleQuizQuestions } from "../../../data/careermapData";
-import { getQuizzes, submitQuiz } from "../../../api/quizApi";
+import { getQuizzes, getQuizAttemptResult, submitQuiz } from "../../../api/quizApi";
 import {
   UnlockRedirectModal,
   usePortalNavigation,
@@ -199,12 +199,7 @@ const unlocked =
       if (titleMatches.length === 1) selectedQuiz = titleMatches[0];
     }
     if (selectedQuiz) {
-      // A deep link (global search, shared URL) must respect the same lock as the list.
-      if (accessStatus !== "preview" || isPreviewFree(previewFreeKeys, selectedQuiz)) {
-        setActiveQuizId(selectedQuiz.id);
-      } else {
-        setUnlockModalItem(getQuizMeta(selectedQuiz).title);
-      }
+      setActiveQuizId(selectedQuiz.id);
     }
   }, [quizzes, location.search, location.state]);
 
@@ -279,7 +274,10 @@ const unlocked =
         throw new Error("Could not record your quiz result. Please try again.");
       }
 
-      setResult(response);
+      const resultResponse = response.resultAvailable
+        ? response
+        : await getQuizAttemptResult(response.attemptId);
+      setResult(resultResponse || response);
       setCompleted(true);
     } catch (error) {
       setSubmitError(error?.response?.data?.message || error?.message || "Could not submit the quiz. Please try again.");
@@ -289,9 +287,27 @@ const unlocked =
   };
 
   if (completed) {
-    const finalScore = result?.score || `${score}/${totalQ}`;
-    const correct = result?.correct ?? score;
-    const wrong = result?.wrong ?? Math.max(totalQ - score, 0);
+    if (result?.resultAvailable !== true) {
+      return (
+        <ModuleScreen maxWidthClass="max-w-sm" className="space-y-6">
+          <div className="flex justify-end"><PageHero backOnly onBack={resetQuiz} /></div>
+          <div className="px-4 py-12 text-center">
+            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full text-2xl" style={{ background: "#fdf0ef", color: "#9a2119" }}>
+              <LockOutlined />
+            </div>
+            <p className="mb-2 text-xl font-bold text-gray-900">Quiz completed</p>
+            <p className="mb-6 text-sm text-gray-500">Unlock the Quiz module with a plan to view your result.</p>
+            <Button type="primary" onClick={() => navigate(`/app/subscription?returnTo=${encodeURIComponent(location.pathname)}`)}>
+              Unlock Quiz
+            </Button>
+            <button onClick={resetQuiz} className="mx-auto mt-4 block text-sm font-semibold text-[#9a2119]">Back to quizzes</button>
+          </div>
+        </ModuleScreen>
+      );
+    }
+    const finalScore = result.score;
+    const correct = result.correct;
+    const wrong = result.wrong;
 
     return (
       <ModuleScreen maxWidthClass="max-w-sm" className="space-y-6">
@@ -450,8 +466,7 @@ const unlocked =
   {!loading && quizzes.map((quiz, index) => {
   const meta = getQuizMeta(quiz);
 
-  const isPreviewMode = accessStatus === "preview";
-  const isFree = !isPreviewMode || isPreviewFree(previewFreeKeys, quiz);
+  const isFree = true;
 
   return (
             <div
@@ -521,16 +536,11 @@ const unlocked =
 
                 <button
   onClick={() => {
-    if (!isFree) {
-      setUnlockModalItem(meta.title);
-      return;
-    }
-
     startQuiz(quiz);
   }}
   className="flex items-center gap-1 text-sm font-bold text-[#9a2119] transition-colors hover:text-[#7a1a13]"
 >
-  {isFree ? "Explore" : "Locked"}
+  {unlocked ? "Start quiz" : "Preview quiz"}
   <ArrowRightOutlined />
 </button>
               </div>
