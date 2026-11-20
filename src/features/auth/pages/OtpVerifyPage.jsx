@@ -15,7 +15,7 @@ export default function OtpVerifyPage() {
   const [params] = useSearchParams();
   // TEMP-DEBUG: remove before production
   const location = useLocation();
-  const initialDevOtp = import.meta.env.DEV ? location.state?.devOtp : undefined;
+  const initialDevOtp = import.meta.env.VITE_SHOW_OTP === "true" ? location.state?.devOtp : undefined;
   const signupForm = useAuthStore((state) => state.signupForm);
   const setTempToken = useAuthStore((state) => state.setTempToken);
   const setAuthSession = useAuthStore((state) => state.setAuthSession);
@@ -83,7 +83,7 @@ export default function OtpVerifyPage() {
       // setStatus({ type: "success", message: response.message || "OTP resent successfully." });
       const response = await sendOtp(mobileNumber, flowType);
       // TEMP-DEBUG: remove this before production — shows OTP on screen for testing
-      const devOtp = import.meta.env.DEV ? (response.otp || response.data?.otp) : undefined;
+      const devOtp = import.meta.env.VITE_SHOW_OTP === "true" ? (response.otp || response.data?.otp) : undefined;
       setVisibleDevOtp(devOtp || "");
       setStatus({
         type: "success",

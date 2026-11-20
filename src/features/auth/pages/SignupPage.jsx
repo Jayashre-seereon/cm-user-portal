@@ -73,12 +73,15 @@ export default function SignupPage() {
     try {
       setIsSubmitting(true);
       setStatus(null);
-      await sendSignupOtp(otpMobile);
+      const otpResponse = await sendSignupOtp(otpMobile);
+      const visibleOtp = import.meta.env.VITE_SHOW_OTP === "true"
+        ? (otpResponse?.otp || otpResponse?.data?.otp)
+        : undefined;
       setSignupForm({
         ...form,
         mobile: normalizeMobile(form.mobile),
       });
-      navigate(`/otp-verify?next=${encodeURIComponent("/profile-setup")}&identifier=${encodeURIComponent(otpMobile)}&otpType=signup`);
+      navigate(`/otp-verify?next=${encodeURIComponent("/profile-setup")}&identifier=${encodeURIComponent(otpMobile)}&otpType=signup`, { state: { devOtp: visibleOtp } });
     } catch (error) {
       setStatus({
         type: "error",
