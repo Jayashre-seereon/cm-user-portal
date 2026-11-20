@@ -19,16 +19,7 @@ export default defineConfig(({ command, mode }) => {
     plugins: [react()],
     build: isProdBuild
       ? {
-          rolldownOptions: {
-            output: {
-              // Strip console.* and debugger statements from production bundles.
-              minify: {
-                compress: { dropConsole: true, dropDebugger: true },
-                mangle: true,
-                codegen: true,
-              },
-            },
-          },
+          minify: true,
         }
       : undefined,
   };
