@@ -29,6 +29,7 @@ export default function OtpVerifyPage() {
   const [status, setStatus] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResending, setIsResending] = useState(false);
+  const [visibleDevOtp, setVisibleDevOtp] = useState(initialDevOtp || "");
 
   async function handleVerifyOtp() {
     if (otp.length !== 6) {
@@ -80,14 +81,13 @@ export default function OtpVerifyPage() {
       setStatus(null);
       // const response = await sendOtp(mobileNumber, flowType);
       // setStatus({ type: "success", message: response.message || "OTP resent successfully." });
-            const response = await sendOtp(mobileNumber, flowType);
+      const response = await sendOtp(mobileNumber, flowType);
       // TEMP-DEBUG: remove this before production — shows OTP on screen for testing
       const devOtp = import.meta.env.DEV ? (response.otp || response.data?.otp) : undefined;
+      setVisibleDevOtp(devOtp || "");
       setStatus({
         type: "success",
-        message: devOtp
-          ? `${response.message || "OTP resent successfully."} (OTP: ${devOtp})`
-          : response.message || "OTP resent successfully.",
+        message: response.message || "OTP resent successfully.",
       });
     } catch (error) {
       setStatus({
@@ -119,9 +119,9 @@ export default function OtpVerifyPage() {
           <div style={{ fontSize: "15px", fontWeight: "800", color: "#9a2119" }}>{mobileNumber || "your phone"}</div>
 
           {/* TEMP-DEBUG: remove before production */}
-          {initialDevOtp ? (
+          {visibleDevOtp ? (
             <div style={{ fontSize: "13px", fontWeight: 700, color: "#9a2119", marginTop: "8px" }}>
-              OTP: {initialDevOtp}
+              OTP: {visibleDevOtp}
             </div>
           ) : null}
         </div>
