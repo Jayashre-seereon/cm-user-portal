@@ -75,6 +75,33 @@ export function isValidDateInput(value = "") {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
+// The saved profile on the server is the source of truth. Its non-empty values (name, email,
+// address, ...) replace a stale or empty local copy; fields the server has nothing for keep
+// what is local. The password is never taken from the server.
+export function mergeServerProfile(localProfile = {}, serverProfile = null) {
+  if (!serverProfile) return localProfile;
+  const merged = { ...localProfile };
+  Object.entries(serverProfile).forEach(([key, value]) => {
+    if (key === "password") return;
+    if (value !== "" && value !== null && value !== undefined) merged[key] = value;
+  });
+  return merged;
+}
+
+// The name to show for the signed-in user: the profile name, else the name on the login
+// session, else the username or the start of the email - never a made-up placeholder.
+export function getDisplayName(profile, authUser) {
+  const fromProfile = String(profile?.name || "").trim();
+  if (fromProfile) return fromProfile;
+  const fromSession = [authUser?.firstName, authUser?.lastName].filter(Boolean).join(" ").trim();
+  return (
+    fromSession ||
+    String(authUser?.username || "").trim() ||
+    String(authUser?.email || "").split("@")[0] ||
+    "My account"
+  );
+}
+
 export function mapApiUserToProfile(user) {
   if (!user) {
     return null;

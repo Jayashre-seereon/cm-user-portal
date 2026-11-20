@@ -157,6 +157,17 @@ export function loadPreviewFreeKeys(route, limit = PREVIEW_FREE_ITEM_LIMIT) {
  * "server"  - the module's page checks with the server when the item is opened
  */
 export function resolvePreviewAccess(item, route, { freeKeys } = {}) {
+  // Career Archive: a career page is free in preview only when its category is marked free (a
+  // locked category locks everything beneath it: 2nd categories, specializations, details). The
+  // server reports that on each career search result. A result without the flag (an older
+  // server, or a stream - streams themselves are only listings) leaves the decision to the page,
+  // which asks the server when it opens.
+  if (route === "/app/library") {
+    const careerFlag = item?.metadata?.isFree;
+    if (typeof careerFlag === "boolean") return careerFlag ? "free" : "locked";
+    return "server";
+  }
+
   const kind = getPreviewAccessKind(route);
   if (kind === "server") return "server";
 
