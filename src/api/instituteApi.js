@@ -96,6 +96,9 @@ function mapInstituteItem(item, index) {
     url: getInstituteWebsite(item),
     website: getInstituteWebsite(item),
 
+    admissionProcess:
+      stripHtml(item?.admission_process || item?.admissionProcess) || "",
+
     rank:
       item?.rank || "Top",
 
