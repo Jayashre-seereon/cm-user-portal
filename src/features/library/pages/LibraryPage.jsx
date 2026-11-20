@@ -861,16 +861,17 @@ function InstituteCard({ inst, badge }) {
   const isOdisha = badge === "Odisha";
   const logo = inst?.logo || null;
   const [logoFailed, setLogoFailed] = useState(false);
-  const url = inst?.raw?.url || null;
-  const admissionProcess = inst?.raw?.admission_process || null;
-  const tentativeDate = inst?.raw?.tentative_date
-    ? formatSharedDate(new Date(inst.raw.tentative_date))
-    : null;
+  const rawUrl = String(inst?.url || inst?.website || inst?.raw?.url || "").trim();
+  const url = rawUrl ? (/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`) : null;
+  const urlLabel = url ? url.replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/+$/, "") : "";
+  const admissionProcess = inst?.admissionProcess || inst?.raw?.admission_process || null;
+  const tentativeDate = inst?.tentativeDate
+    || (inst?.raw?.tentative_date ? formatSharedDate(new Date(inst.raw.tentative_date)) : null);
   const stateName = inst?.state || inst?.raw?.state || "";
   const isGovt = String(inst?.type || inst?.raw?.institute_type || "").toLowerCase().includes("gov");
 
   return (
-    <div className="group overflow-hidden rounded-[24px] border border-[#f0e4e2] bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-[#d7c3bc] hover:shadow-lg hover:shadow-[#9a2119]/10">
+    <div className="group relative overflow-hidden rounded-[24px] border border-[#f0e4e2] bg-white shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-[#d7c3bc] hover:shadow-lg hover:shadow-[#9a2119]/10">
       <div className="flex items-center justify-between gap-3 border-b border-[#f7eeec] px-4 py-3">
         <div className="flex items-center gap-2">
           <span className={`h-2.5 w-2.5 rounded-full ${isGovt ? "bg-[#2f9367]" : "bg-[#c9a11d]"}`} />
@@ -889,7 +890,7 @@ function InstituteCard({ inst, badge }) {
         ) : null}
       </div>
 
-      <div className="flex items-start gap-3 px-4 py-4">
+      <div className={`flex items-start gap-3 px-4 py-4 ${url ? "pr-12" : ""}`}>
         <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[18px] border border-[#f0e4e2] bg-[#fffaf8]">
           {logo && !logoFailed ? (
             <img
@@ -918,6 +919,7 @@ function InstituteCard({ inst, badge }) {
         </div>
       </div>
 
+      {admissionProcess || tentativeDate ? (
       <div className="grid gap-3 border-t border-[#f7eeec] px-4 py-4 sm:grid-cols-2">
         {admissionProcess ? (
           <div className="rounded-[16px] bg-[#fff8f4] px-3 py-2.5">
@@ -936,19 +938,19 @@ function InstituteCard({ inst, badge }) {
           </div>
         ) : null}
       </div>
+      ) : null}
 
       {url ? (
-        <div className="border-t border-[#f7eeec] px-4 py-3">
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 text-[13px] font-bold text-[#9a2119] transition hover:translate-x-0.5"
-          >
-            Explore institution
-            <ArrowRightOutlined />
-          </a>
-        </div>
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={urlLabel}
+          aria-label={`Open ${inst.name} website`}
+          className="absolute bottom-3 right-3 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#fdf0ee] text-[14px] text-[#9a2119] transition hover:translate-x-0.5 hover:bg-[#9a2119] hover:text-white"
+        >
+          <ArrowRightOutlined />
+        </a>
       ) : null}
     </div>
   );
