@@ -83,9 +83,7 @@ export default function LoginPage() {
 
       if (isExistingUser) {
         const loginOtpResponse = await sendOtp(formattedMobile, "login");
-        const visibleOtp = import.meta.env.VITE_SHOW_OTP === "true"
-          ? (loginOtpResponse?.otp || loginOtpResponse?.data?.otp)
-          : undefined;
+        const visibleOtp = loginOtpResponse?.otp || loginOtpResponse?.data?.otp;
         navigate(
           `/otp-verify?next=${encodeURIComponent(destination)}&identifier=${encodeURIComponent(formattedMobile)}&otpType=login`,
           { state: { devOtp: visibleOtp } }
@@ -94,9 +92,7 @@ export default function LoginPage() {
       }
 
       const signupOtpResponse = await sendOtp(formattedMobile, "signup");
-      const visibleSignupOtp = import.meta.env.VITE_SHOW_OTP === "true"
-        ? (signupOtpResponse?.otp || signupOtpResponse?.data?.otp)
-        : undefined;
+      const visibleSignupOtp = signupOtpResponse?.otp || signupOtpResponse?.data?.otp;
       setOnboardingData(onboarding);
       setSignupForm({ mobile: normalizedMobile });
       navigate(
