@@ -26,6 +26,8 @@ import { useAppState } from "../../../state/AppStateContext";
 import { useBrowserStepHistory } from "../../../shared/useBrowserStepHistory";
 import { useScrollToTopOnChange } from "../../../shared/useScrollToTopOnChange";
 import { useVerifiedAccessStatus } from "../../../shared/useVerifiedAccessStatus";
+import { normalizeQuizTitle, sortQuizzes } from "../../../utils/quizOrder";
+import { buildFreeKeys, isPreviewFree } from "../../../utils/previewAccess";
 const QUIZ_ICONS = [
   <FileTextOutlined key="file" />,
   <MedicineBoxOutlined key="medicine" />,
@@ -36,14 +38,6 @@ const QUIZ_ICONS = [
   <LinkOutlined key="link" />,
   <BulbOutlined key="bulb" />,
 ];
-const QUIZ_ORDER = [
-  "science",
-  "commerce",
-  "arts and humanities",
-  "neutral",
-  "competitive",
-  "vocational",
-];
 const SCORE_MESSAGES = [
   "Keep practicing and you will get there.",
   "You are building momentum.",
@@ -51,34 +45,6 @@ const SCORE_MESSAGES = [
   "Great work, you are on track.",
   "Perfect score, outstanding.",
 ];
-function normalizeQuizTitle(title) {
-  return String(title || "")
-    .trim()
-    .toLowerCase()
-    .replace(/&/g, "and")
-    .replace(/\s+/g, " ");
-}
-
-function sortQuizzes(quizzes) {
-  return [...quizzes].sort((a, b) => {
-    const titleA = normalizeQuizTitle(a.title);
-    const titleB = normalizeQuizTitle(b.title);
-
-    const indexA = QUIZ_ORDER.indexOf(titleA);
-    const indexB = QUIZ_ORDER.indexOf(titleB);
-
-    // Known quizzes come first in the required order
-    if (indexA !== -1 && indexB !== -1) {
-      return indexA - indexB;
-    }
-
-    if (indexA !== -1) return -1;
-    if (indexB !== -1) return 1;
-
-    // Any other quiz goes after the required quizzes
-    return titleA.localeCompare(titleB);
-  });
-}
 function mapFallbackQuestions(quizIndex = 0) {
   return sampleQuizQuestions.map((question, index) => ({
     id: `fallback-${quizIndex}-${index}`,
@@ -163,6 +129,8 @@ const unlocked =
   const [unlockModalItem, setUnlockModalItem] = useState(null);
  const [quizzes, setQuizzes] = useState([]); const [loadError, setLoadError] = useState("");
   const [loading, setLoading] = useState(true);
+  // The free quizzes in preview are the first ones of the full list.
+  const previewFreeKeys = useMemo(() => buildFreeKeys(quizzes), [quizzes]);
   const [activeQuizId, setActiveQuizId] = useState(null);
   useScrollToTopOnChange(activeQuizId);
   const [current, setCurrent] = useState(0);
@@ -230,7 +198,14 @@ const unlocked =
       const titleMatches = quizzes.filter((quiz) => normalizeQuizTitle(quiz.title) === normalizedTitle);
       if (titleMatches.length === 1) selectedQuiz = titleMatches[0];
     }
-    if (selectedQuiz) setActiveQuizId(selectedQuiz.id);
+    if (selectedQuiz) {
+      // A deep link (global search, shared URL) must respect the same lock as the list.
+      if (accessStatus !== "preview" || isPreviewFree(previewFreeKeys, selectedQuiz)) {
+        setActiveQuizId(selectedQuiz.id);
+      } else {
+        setUnlockModalItem(getQuizMeta(selectedQuiz).title);
+      }
+    }
   }, [quizzes, location.search, location.state]);
 
   const activeQuiz = useMemo(() => quizzes.find((quiz) => String(quiz.id) === String(activeQuizId)) || null, [activeQuizId, quizzes]);
@@ -255,8 +230,12 @@ const unlocked =
   }, [activeQuiz]);
 
   const resetQuiz = () => {
-    if (location.state?.fromGlobalSearch) {
-      navigate(location.state.returnTo || "/app/dashboard");
+    // Opened from global search on ANOTHER page -> go back there. If the search was made
+    // from this very page, that target is this page, so fall through and close the quiz.
+    const returnTo = location.state?.returnTo;
+    const returnPath = String(returnTo || "").split("?")[0];
+    if (location.state?.fromGlobalSearch && returnTo && returnPath !== location.pathname) {
+      navigate(returnTo);
       return;
     }
     setActiveQuizId(null);
@@ -472,7 +451,7 @@ const unlocked =
   const meta = getQuizMeta(quiz);
 
   const isPreviewMode = accessStatus === "preview";
-  const isFree = !isPreviewMode || index < 4;
+  const isFree = !isPreviewMode || isPreviewFree(previewFreeKeys, quiz);
 
   return (
             <div

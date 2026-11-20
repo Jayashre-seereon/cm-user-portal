@@ -19,6 +19,7 @@ import { useScrollToTopOnChange } from "../../../shared/useScrollToTopOnChange";
 import { useVerifiedAccessStatus } from "../../../shared/useVerifiedAccessStatus";
 import { sanitizeHtml } from "../../../utils/sanitizeHtml";
 import { formatDate as formatSharedDate } from "../../../utils/format";
+import { buildFreeKeys, isPreviewFree, sortMentorsNewestFirst } from "../../../utils/previewAccess";
 
 function formatNumericDate(value) {
   const parsed = new Date(value);
@@ -320,23 +321,24 @@ export default function BookMentorPage() {
   // ── Filtered list ────────────────────────────────────────────────────────
  const filteredMentorList = useMemo(
   () =>
-    mentorList
-      .filter((mentor) => {
+    sortMentorsNewestFirst(
+      mentorList.filter((mentor) => {
         return (
           !category ||
           String(mentor.categoryObj?.id) === String(category)
         );
       })
-      .sort((a, b) => {
-        if (a.createdAt && b.createdAt) {
-          return new Date(b.createdAt) - new Date(a.createdAt);
-        }
-
-        return Number(b.id) - Number(a.id);
-      }),
+    ),
 
   [mentorList, category]
 );
+
+  // In preview the free mentors are the first ones of the FULL list (newest first), not of
+  // whatever the domain filter currently shows, so filtering never unlocks a mentor.
+  const previewFreeKeys = useMemo(
+    () => buildFreeKeys(sortMentorsNewestFirst(mentorList)),
+    [mentorList]
+  );
 
   // ── Active mentor ────────────────────────────────────────────────────────
   const activeMentor = useMemo(() => {
@@ -438,8 +440,22 @@ export default function BookMentorPage() {
       pageLocation.state?.searchItem?.title;
 
     if (!mentorParam) return;
+    // The free mentors are worked out from the loaded list, so wait for it.
+    if (mentorListLoading) return;
     if (handledMentorParamRef.current === String(mentorParam)) return;
     let active = true;
+
+    // A deep link (global search, shared URL) must respect the same lock as the list:
+    // a locked mentor opens the unlock prompt instead of the profile.
+    function openFromLink(mentor, mentorKey) {
+      handledMentorParamRef.current = String(mentorParam);
+      if (!isModuleUnlocked && !unlocked && !isPreviewFree(previewFreeKeys, mentor)) {
+        setUnlockModalItem(mentor.name);
+        return;
+      }
+      setSelectedMentor(mentor);
+      setSelectedMentorId(mentorKey);
+    }
 
     async function resolveMentor() {
       const numericId = /^\d+$/.test(String(mentorParam));
@@ -447,9 +463,7 @@ export default function BookMentorPage() {
         try {
           const mentor = await getMentorById(mentorParam);
           if (active && mentor) {
-            handledMentorParamRef.current = String(mentorParam);
-            setSelectedMentor(mentor);
-            setSelectedMentorId(String(mentor.id));
+            openFromLink(mentor, String(mentor.id));
             return;
           }
         } catch {
@@ -463,14 +477,12 @@ export default function BookMentorPage() {
         mentor = nameMatches.length === 1 ? nameMatches[0] : undefined;
       }
       if (active && mentor) {
-        handledMentorParamRef.current = String(mentorParam);
-        setSelectedMentor(mentor);
-        setSelectedMentorId(String(mentor.id || mentor.name));
+        openFromLink(mentor, String(mentor.id || mentor.name));
       }
     }
     resolveMentor();
     return () => { active = false; };
-  }, [mentorList, params, pageLocation.state]);
+  }, [mentorList, mentorListLoading, params, pageLocation.state, previewFreeKeys, isModuleUnlocked, unlocked]);
 
   useEffect(() => {
     if (!activeMentor) {
@@ -661,8 +673,30 @@ export default function BookMentorPage() {
     }
   };
 
+  // Back arrow on the mentor profile.
+  // - Opened from global search on ANOTHER page: go back to that page.
+  // - Opened from global search while already on this page: that target is this same page,
+  //   so navigating there would do nothing -> just close the profile.
+  // - Opened from the list: step back through history (restores the list).
+  function handleDetailBack() {
+    const returnTo = pageLocation.state?.returnTo;
+    const returnPath = String(returnTo || "").split("?")[0];
+    if (pageLocation.state?.fromGlobalSearch) {
+      if (returnTo && returnPath !== pageLocation.pathname) {
+        navigate(returnTo);
+      } else {
+        setSelectedMentorId("");
+        setSelectedMentor(null);
+        setShowBookingPanel(false);
+      }
+      return;
+    }
+    navigate(-1);
+  }
+
   const detailUnlocked = activeMentor
-    ? canAccessFreeDetail("book-mentor", activeMentor.name)
+    ? isPreviewFree(previewFreeKeys, activeMentor) ||
+      canAccessFreeDetail("book-mentor", activeMentor.name)
     : true;
 
   // ── Processing screen ────────────────────────────────────────────────────
@@ -756,7 +790,7 @@ export default function BookMentorPage() {
           </div>
           <PageHero
             backOnly
-            onBack={() => navigate(pageLocation.state?.fromGlobalSearch ? (pageLocation.state.returnTo || "/app/dashboard") : -1)}
+            onBack={handleDetailBack}
             className="shrink-0"
           />
         </div>
@@ -1122,11 +1156,12 @@ export default function BookMentorPage() {
       {/* ── Mentor grid ── */}
       {mentorListLoading ? <div className="py-10 text-center text-gray-500">Loading mentors...</div> : null}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {!mentorListLoading && filteredMentorList.map((mentor, index) => {
+        {!mentorListLoading && filteredMentorList.map((mentor) => {
+          // Preview: exactly the 4 free mentors are unlocked (see previewFreeKeys above).
           const mentorFree =
              isModuleUnlocked
               ? true
-              : unlocked || index < 4 || canAccessFreeDetail("book-mentor", mentor.name);
+              : unlocked || isPreviewFree(previewFreeKeys, mentor);
 
           return (
             <MentorCard

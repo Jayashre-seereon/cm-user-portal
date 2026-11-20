@@ -12,6 +12,7 @@ import { State } from "country-state-city";
 
 import { getInstitutes, getCategories, getInstituteFilters } from "../../../api/instituteApi";
 import { globalSearch } from "../../../api/searchApi";
+import { buildFreeKeys, isPreviewFree, loadPreviewFreeKeys } from "../../../utils/previewAccess";
 import { ModuleScreen, PageHero } from "../../../components/ui";
 import {
   UnlockRedirectModal,
@@ -93,6 +94,30 @@ export default function InstitutePage() {
   const [searchResult, setSearchResult] = useState(null);
   const [requestedInstituteId, setRequestedInstituteId] = useState(() =>
     new URLSearchParams(window.location.search).get("instituteId") || ""
+  );
+
+  // In preview the free institutes are the first ones of the FULL directory (page 1, no
+  // filters) - never the first ones of the filtered / searched view - so filtering,
+  // searching or pinning a search hit can't unlock an institute.
+  const [directoryFreeKeys, setDirectoryFreeKeys] = useState(null);
+  useEffect(() => {
+    if (moduleMode !== "preview") return undefined;
+    let active = true;
+    loadPreviewFreeKeys("/app/institutes")
+      .then((keys) => {
+        if (active) setDirectoryFreeKeys(keys);
+      })
+      .catch((err) => console.error("Failed to load the free institutes:", err));
+    return () => {
+      active = false;
+    };
+  }, [moduleMode]);
+  const isDefaultDirectoryView =
+    page === 1 && !search.trim() && !category && !country && !stateFilter && !type && !searchResult;
+  // Until the directory's first page is known, the unfiltered first page is a safe stand-in.
+  const previewFreeKeys = useMemo(
+    () => directoryFreeKeys || (isDefaultDirectoryView ? buildFreeKeys(items) : null),
+    [directoryFreeKeys, isDefaultDirectoryView, items]
   );
 
   useEffect(() => {
@@ -633,7 +658,15 @@ export default function InstitutePage() {
 
           <PageHero
             backOnly
-            onBack={() => navigate(location.state?.fromGlobalSearch ? (location.state.returnTo || "/app/dashboard") : "/app/dashboard")}
+            onBack={() => {
+              // From global search on ANOTHER page -> back there. If the search was made from
+              // this very page, that target is this page (a no-op), so go to the dashboard.
+              const returnTo = location.state?.returnTo;
+              const returnPath = String(returnTo || "").split("?")[0];
+              const backToSearchOrigin =
+                location.state?.fromGlobalSearch && returnTo && returnPath !== location.pathname;
+              navigate(backToSearchOrigin ? returnTo : "/app/dashboard");
+            }}
             className="shrink-0"
           />
         </div>
@@ -744,7 +777,7 @@ export default function InstitutePage() {
       ======================================================== */}
       <div className="content-stagger grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         {!loading &&
-          filtered.map((item, index) => {
+          filtered.map((item) => {
             const instituteType =
               item.type ||
               item.institute_type ||
@@ -763,7 +796,7 @@ export default function InstitutePage() {
               moduleMode === "preview";
 
             const isFree =
-              !isPreviewMode || index < 4;
+              !isPreviewMode || isPreviewFree(previewFreeKeys, item);
 
             return (
               <div

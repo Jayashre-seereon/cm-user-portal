@@ -1691,8 +1691,12 @@ useEffect(() => {
   }
 
   function handleBack() {
-    if (pageLocation.state?.fromGlobalSearch) {
-      navigate(pageLocation.state.returnTo || "/app/dashboard");
+    // From global search on ANOTHER page -> back there. If the search was made from this
+    // very page, that target is this page (a no-op), so fall through to the normal level back.
+    const returnTo = pageLocation.state?.returnTo;
+    const returnPath = String(returnTo || "").split("?")[0];
+    if (pageLocation.state?.fromGlobalSearch && returnTo && returnPath !== pageLocation.pathname) {
+      navigate(returnTo);
       return;
     }
     if (currentLevel === "streams") {
