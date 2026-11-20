@@ -41,7 +41,6 @@ export default function AssessmentLandingPage() {
   const [accessStatus, setAccessStatus] = useState(null);
   const [publishedAssessments, setPublishedAssessments] = useState([]);
   const [myAttempts, setMyAttempts] = useState([]);
-  const [activeAttempt, setActiveAttempt] = useState(null);
   const [latestCompletedAttempt, setLatestCompletedAttempt] = useState(null);
 
   useEffect(() => {
@@ -75,14 +74,8 @@ export default function AssessmentLandingPage() {
           : [];
       setMyAttempts(attempts);
 
-      // Find in-progress attempt if any
-      const inProgress = attempts.find(
-        (a) =>
-          a.status === "in_progress" ||
-          a.status === "IN_PROGRESS" ||
-          (a.isCompleted === false && !a.completedAt && !a.report && !/completed/i.test(String(a.status || "")))
-      );
-      setActiveAttempt(inProgress || null);
+      // Incomplete attempts are retained in history, but a fresh start creates
+      // a new attempt instead of resuming abandoned answers.
 
       // Find latest completed attempt
       const completed = attempts.filter(
@@ -136,14 +129,7 @@ export default function AssessmentLandingPage() {
     });
   }
 
-  async function handleStartAssessment(forceNew = false) {
-    // If in-progress test exists and not forcing new: resume directly
-    if (activeAttempt && !forceNew) {
-      const attemptId = activeAttempt.id || activeAttempt.attemptId || activeAttempt._id;
-      navigate(`/app/assessment/attempt/${attemptId}`);
-      return;
-    }
-
+  async function handleStartAssessment() {
     // If accessStatus specifically marks user as blocked:
     if (accessStatus && accessStatus.allowed === false) {
       if (accessStatus.reason === "ALREADY_COMPLETED") {
@@ -227,19 +213,19 @@ export default function AssessmentLandingPage() {
       cancelButtonProps: {
         className: "!rounded-xl",
       },
-      onOk: () => handleStartAssessment(true),
+      onOk: () => handleStartAssessment(),
     });
   }
 
   // Determine current access and completion state
   const isAllowed = accessStatus
     ? accessStatus.allowed === true
-    : !latestCompletedAttempt || !!activeAttempt;
+    : !latestCompletedAttempt;
 
   const isAlreadyCompleted = accessStatus
     ? accessStatus.allowed === false &&
       (accessStatus.reason === "ALREADY_COMPLETED" || !!accessStatus.completedAttemptId)
-    : Boolean(latestCompletedAttempt) && !activeAttempt;
+    : Boolean(latestCompletedAttempt);
 
   const isNoActivePlan = accessStatus
     ? accessStatus.allowed === false && accessStatus.reason === "NO_ACTIVE_PLAN"
@@ -313,33 +299,6 @@ export default function AssessmentLandingPage() {
                     <Spin indicator={<LoadingOutlined style={{ fontSize: 32, color: "#fff" }} spin />} />
                     <div className="mt-3 text-xs text-rose-200">Checking assessment access...</div>
                   </div>
-                ) : activeAttempt ? (
-                  /* STATE 1A: In-Progress Attempt Found */
-                  <div>
-                    <span className="inline-block rounded-full bg-amber-400/20 px-3 py-1 text-xs font-bold text-amber-200">
-                      <ClockCircleOutlined className="mr-1" /> In-Progress Test Found
-                    </span>
-                    <h3 className="mt-2 text-xl font-bold text-white">Continue Your Assessment</h3>
-                    <p className="mt-1 text-xs text-rose-100">
-                      Your answers are auto-saved. Resume right where you left off.
-                    </p>
-
-                    <Button
-                      type="primary"
-                      size="large"
-                      loading={starting}
-                      onClick={() => handleStartAssessment(false)}
-                      className="mt-4 h-11 w-full rounded-xl border-none bg-amber-400 text-sm font-bold text-slate-900 shadow-md hover:bg-amber-300"
-                    >
-                      ▶️ Resume Assessment
-                    </Button>
-                    <button
-                      onClick={handleRetakeClick}
-                      className="mt-3 text-xs text-rose-200 underline hover:text-white"
-                    >
-                      Or start a fresh attempt
-                    </button>
-                  </div>
                 ) : isAlreadyCompleted ? (
                   /* STATE 2: Test Completed (Locked for Retake under 1-Plan = 1-Attempt Rule) */
                   <div>
@@ -408,7 +367,7 @@ export default function AssessmentLandingPage() {
                       type="primary"
                       size="large"
                       loading={starting}
-                      onClick={() => handleStartAssessment(false)}
+                      onClick={handleStartAssessment}
                       className="mt-4 h-12 w-full rounded-xl border-none bg-amber-400 text-base font-bold text-slate-900 shadow-lg hover:bg-amber-300"
                     >
                       🚀 Start Assessment Now
@@ -549,7 +508,7 @@ export default function AssessmentLandingPage() {
               <Button
                 type="primary"
                 size="large"
-                onClick={() => handleStartAssessment(false)}
+                onClick={handleStartAssessment}
                 className="mt-4 rounded-xl bg-[#9a2119] px-6 font-bold hover:bg-[#801812]"
               >
                 {isNoActivePlan ? "🔒 Unlock Assessment Plan" : "🚀 Start Your First Assessment"}
@@ -600,13 +559,7 @@ export default function AssessmentLandingPage() {
                               View Report
                             </Button>
                           ) : (
-                            <Button
-                              size="small"
-                              onClick={() => navigate(`/app/assessment/attempt/${attemptId}`)}
-                              className="rounded-lg border-amber-500 text-xs font-bold text-amber-600 hover:bg-amber-50"
-                            >
-                              Resume
-                            </Button>
+                            <Tag color="default">Abandoned</Tag>
                           )}
                         </td>
                       </tr>
