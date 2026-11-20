@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRightOutlined,
   BookOutlined,
@@ -18,6 +18,7 @@ import { UnlockRedirectModal, usePortalNavigation } from "../../portal/component
 import { useScrollToTopOnChange } from "../../../shared/useScrollToTopOnChange";
 import { sanitizeHtml } from "../../../utils/sanitizeHtml";
 import { useVerifiedAccessStatus } from "../../../shared/useVerifiedAccessStatus";
+import { buildFreeKeys, isPreviewFree } from "../../../utils/previewAccess";
 
 // Fixed, common to all destinations — shown once on the listing page, not per country
 const INTRO_TEXT =
@@ -239,6 +240,8 @@ export default function AbroadPage() {
 
   const [countryList, setCountryList] = useState([]);
   const [countriesLoading, setCountriesLoading] = useState(true);
+  // The free destinations in preview are the first ones of the full list (highest id first).
+  const previewFreeKeys = useMemo(() => buildFreeKeys(countryList), [countryList]);
   const [selectedCountry, setSelectedCountry] = useState(null);
   useScrollToTopOnChange(selectedCountry?.id || selectedCountry?.name || null);
   const [unlockModalItem, setUnlockModalItem] = useState(null);
@@ -348,8 +351,16 @@ function closeConsultForm() {
 }
 
 function handleCountryBack() {
+  // From global search on ANOTHER page -> back there. If the search was made from this very
+  // page, that target is this page (a no-op), so just close the destination.
   if (location.state?.fromGlobalSearch) {
-    navigate(location.state.returnTo || "/app/dashboard");
+    const returnTo = location.state.returnTo;
+    const returnPath = String(returnTo || "").split("?")[0];
+    if (returnTo && returnPath !== location.pathname) {
+      navigate(returnTo);
+    } else {
+      setSelectedCountry(null);
+    }
     return;
   }
   window.history.back();
@@ -410,7 +421,12 @@ function handleCountryBack() {
     );
 
     if (country) {
-      setSelectedCountry(country);
+      // A deep link (global search, shared URL) must respect the same lock as the list.
+      if (accessStatus !== "preview" || isPreviewFree(previewFreeKeys, country)) {
+        setSelectedCountry(country);
+      } else {
+        setUnlockModalItem(country.name);
+      }
     }
   }, [countryList, location.search]);
 
@@ -2504,7 +2520,7 @@ if (selectedCountry) {
             {!countriesLoading && countryList.length === 0 && !loadError ? <div className="col-span-full py-8 text-center text-sm text-muted">No study abroad destinations available right now.</div> : null}
             {!countriesLoading && countryList.map((country, index) => {
               const isPreviewMode = accessStatus === "preview";
-              const isFree = !isPreviewMode || index < 4;
+              const isFree = !isPreviewMode || isPreviewFree(previewFreeKeys, country);
 
               return (
                 <div

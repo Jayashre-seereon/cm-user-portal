@@ -7,6 +7,7 @@ import { useAppState } from "../../../state/AppStateContext";
 import { checkModuleAccess, startPreview } from "../../../api/moduleAccessApi";
 import { UnlockRedirectModal, usePortalNavigation } from "../../portal/components/portalPageShared";
 import { getNewsletters } from "../../../api/newsletterApi";
+import { buildFreeKeys, isPreviewFree } from "../../../utils/previewAccess";
 
 // Normalize whatever the API/route gives us into one of: 'full' | 'preview' | 'locked'
 // 'unlocked' is treated as an alias for 'full'.
@@ -127,6 +128,9 @@ export default function NewsletterPage() {
   const [selectedType, setSelectedType] = useState("ALL");
   const hasFullAccess = moduleMode === "full" || isUnlocked("newsletter");
   const isPreview = moduleMode === "preview";
+  // The free newsletters in preview are the newest ones of the FULL list, not of whatever
+  // the Weekly/Quarterly tab or a search link currently shows, so neither can unlock one.
+  const previewFreeKeys = useMemo(() => buildFreeKeys(items, previewLimit), [items, previewLimit]);
 
   useEffect(() => {
     let active = true;
@@ -231,15 +235,15 @@ const deepLinkNotFound = useMemo(() => {
   }, [previewRemaining, previewExpired]);
 
 
-  function isItemUnlocked(index) {
+  function isItemUnlocked(item) {
     if (hasFullAccess) return true;
-    if (isPreview) return index < previewLimit;
+    if (isPreview) return isPreviewFree(previewFreeKeys, item);
     return false;
   }
 
-  async function openNewsletter(item, index) {
+  async function openNewsletter(item) {
     try {
-      if (!isItemUnlocked(index)) {
+      if (!isItemUnlocked(item)) {
         setUnlockModalItem(item);
         return;
       }
@@ -273,7 +277,18 @@ const deepLinkNotFound = useMemo(() => {
       
 
       <div className="flex justify-end">
-        <PageHero backOnly onBack={() => navigate(pageLocation.state?.fromGlobalSearch ? (pageLocation.state.returnTo || "/app/dashboard") : "/app/dashboard")} />
+        <PageHero
+          backOnly
+          onBack={() => {
+            // From global search on ANOTHER page -> back there. If the search was made from
+            // this very page, that target is this page (a no-op), so go to the dashboard.
+            const returnTo = pageLocation.state?.returnTo;
+            const returnPath = String(returnTo || "").split("?")[0];
+            const backToSearchOrigin =
+              pageLocation.state?.fromGlobalSearch && returnTo && returnPath !== pageLocation.pathname;
+            navigate(backToSearchOrigin ? returnTo : "/app/dashboard");
+          }}
+        />
       </div>
       {error ? <Alert type="warning" message={error} showIcon style={{ borderRadius: 16 }} /> : null}
 <div className="mb-5 flex flex-wrap gap-2">
@@ -301,14 +316,14 @@ const deepLinkNotFound = useMemo(() => {
 ) : null}
    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
  {filteredItems.length > 0 ? (
-  filteredItems.map((item, index) => (
+  filteredItems.map((item) => (
             <button
               key={item.id}
               type="button"
-              onClick={() => openNewsletter(item, index)}
+              onClick={() => openNewsletter(item)}
               className="text-left"
             >
-              <NewsletterCard item={item} canView={isItemUnlocked(index)} />
+              <NewsletterCard item={item} canView={isItemUnlocked(item)} />
             </button>
           ))
         ) : loading ? (

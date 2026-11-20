@@ -95,14 +95,31 @@ function mapEntranceExam(item, index) {
     categoryObj: item?.category || null,
     secondcategoryObj: item?.secondcategory || null,
     subcategoryObj: item?.subcategory || null,
+    // The lean list (see getEntranceExams) has no `about` / `details`. Such an exam still
+    // needs getEntranceExamById before its detail page can show the full text.
+    isLean: item?.about === undefined && item?.details === undefined,
   };
 }
 
+// The cards and filters only need a few fields. `lean=true` asks the server to leave out the
+// long description text, which is ~90% of the full list (5 MB for 400+ exams, 20 s+ to load,
+// past the 20 s request timeout). An older server ignores the flag and returns everything,
+// which still works - just slower.
 export async function getEntranceExams() {
-  const response = await api.get("/entranceexam");
+  const response = await api.get("/entranceexam", { params: { lean: true } });
   const items = Array.isArray(response?.data?.data) ? response.data.data : [];
 
   return items.map((item, index) => mapEntranceExam(item, index));
+}
+
+// The full record of one exam (long description, details sections), loaded when it is opened.
+export async function getEntranceExamById(id) {
+  const response = await api.get(`/entranceexam/${encodeURIComponent(id)}`);
+  const item = response?.data?.data;
+  if (!item) {
+    throw new Error("Exam details are not available right now.");
+  }
+  return mapEntranceExam(item, 0);
 }
 
 export const getCategories = async () => {

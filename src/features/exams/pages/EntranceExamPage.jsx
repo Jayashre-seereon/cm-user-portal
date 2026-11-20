@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert } from "antd";
 import {
   CalendarOutlined,
@@ -8,7 +8,7 @@ import {
 } from "@ant-design/icons";
 import { useLocation, useNavigate } from "react-router-dom";
 import { UnlockRedirectModal } from "../../portal/components/portalPageShared";
-import { getEntranceExams ,getCategories} from "../../../api/entranceExamApi";
+import { getEntranceExams, getEntranceExamById, getCategories } from "../../../api/entranceExamApi";
 import { entranceExams as fallbackEntranceExams } from "../../../data/careermapData";
 import { ModuleScreen, PageHero } from "../../../components/ui";
 import { usePortalNavigation } from "../../portal/components/portalPageShared";
@@ -17,6 +17,7 @@ import { Select } from "antd";
 import { useBrowserStepHistory } from "../../../shared/useBrowserStepHistory";
 import { useScrollToTopOnChange } from "../../../shared/useScrollToTopOnChange";
 import { sanitizeHtml } from "../../../utils/sanitizeHtml";
+import { buildFreeKeys, isPreviewFree } from "../../../utils/previewAccess";
 const { Option } = Select;
 
 const normalizeExamSearch = (value = "") =>
@@ -62,8 +63,42 @@ export default function EntranceExamPage() {
   const [selectedExamId, setSelectedExamId] = useState(""); 
   const [mode, setMode] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  useBrowserStepHistory("entranceExamView", { selectedExam }, ({ selectedExam: previousExam }) => {
-    setSelectedExam(previousExam || null);
+  // The free exams in preview are the first ones of the FULL list, not of whatever the
+  // filters currently show, so filtering never unlocks an exam.
+  const previewFreeKeys = useMemo(() => buildFreeKeys(items), [items]);
+  // The list only holds the short version of each exam. Opening one loads its full record
+  // (long description). Loaded exams are remembered for the rest of the visit.
+  const [detailError, setDetailError] = useState(null);
+  const examDetailCacheRef = useRef(new Map());
+
+  async function openExam(exam) {
+    setDetailError(null);
+    const cached = examDetailCacheRef.current.get(exam.id);
+    setSelectedExam(cached || exam);
+    if (cached || !exam.isLean) return;
+    try {
+      const full = await getEntranceExamById(exam.id);
+      examDetailCacheRef.current.set(exam.id, full);
+      // Only swap it in if this exam is still the one being viewed.
+      setSelectedExam((current) => (current && current.id === exam.id ? full : current));
+    } catch (loadError) {
+      console.error("Failed to load exam details:", loadError);
+      setDetailError({
+        id: exam.id,
+        message:
+          loadError?.response?.data?.message ||
+          loadError?.message ||
+          "Could not load the exam details.",
+      });
+    }
+  }
+
+  // Browser Back restores the previous view. Only the exam's id is kept in history (not the
+  // whole exam, whose description text can be large and changes once it has loaded).
+  useBrowserStepHistory("entranceExamView", { selectedExamId: selectedExam?.id ?? null }, ({ selectedExamId: previousId }) => {
+    const previous = previousId ? items.find((item) => String(item.id) === String(previousId)) : null;
+    if (previous) openExam(previous);
+    else setSelectedExam(null);
   }, !location.state?.fromGlobalSearch);
 // LOAD ENTRANCE EXAMS
 
@@ -183,7 +218,15 @@ useEffect(() => {
       if (exact.length === 1) found = exact[0];
     }
 
-    if (found) setSelectedExam(found);
+    if (found) {
+      // A deep link must respect the same lock as the list: a locked exam opens the
+      // unlock prompt instead of its detail page.
+      if (moduleMode !== "preview" || isPreviewFree(previewFreeKeys, found)) {
+        openExam(found);
+      } else {
+        setUnlockModalItem({ title: found.name });
+      }
+    }
 
     // Clear the one-shot deep-link so closing the detail does not re-open it
     const nextState = { ...(location.state || {}) };
@@ -299,7 +342,8 @@ const filtered = useMemo(
 
 
 const examSections = useMemo(() => {
-  if (!selectedExam) return [];
+  // A short (list-only) exam has no description yet - it is loaded when the exam is opened.
+  if (!selectedExam || selectedExam.isLean) return [];
 
   const rawHtml =
     selectedExam?.aboutHtml ||
@@ -349,11 +393,30 @@ const examSections = useMemo(() => {
   return sections;
 }, [selectedExam]);
 
+// Back arrow on the exam detail page.
+// - Opened from global search on ANOTHER page: go back to that page.
+// - Opened from global search while already on this page: that "return" target is this
+//   same page, so navigating there would do nothing -> just close the detail.
+// - Opened from the list: step back through history (restores the list).
+function handleDetailBack() {
+  const returnTo = location.state?.returnTo;
+  const returnPath = String(returnTo || "").split("?")[0];
+  if (location.state?.fromGlobalSearch) {
+    if (returnTo && returnPath !== location.pathname) {
+      navigate(returnTo);
+    } else {
+      setSelectedExam(null);
+    }
+    return;
+  }
+  navigate(-1);
+}
+
 if (selectedExam) {
   return (
     <ModuleScreen className="space-y-4">
       <div className="flex justify-end">
-        <PageHero backOnly onBack={() => navigate(location.state?.fromGlobalSearch ? (location.state.returnTo || "/app/dashboard") : -1)} />
+        <PageHero backOnly onBack={handleDetailBack} />
       </div>
 
       <div className="content-stagger grid grid-cols-1 gap-5 lg:grid-cols-[1fr_320px] lg:items-start">
@@ -429,7 +492,24 @@ if (selectedExam) {
             </div>
           ))}
 
-          {!examSections.length ? (
+          {selectedExam.isLean ? (
+            <div className="rounded-[26px] border border-[#f0e4e2] bg-white p-6 text-sm text-gray-500">
+              {detailError?.id === selectedExam.id ? (
+                <div className="flex flex-wrap items-center gap-3">
+                  <span>{detailError.message}</span>
+                  <button
+                    type="button"
+                    onClick={() => openExam(selectedExam)}
+                    className="rounded-lg border border-[#9a2119] px-3 py-1 text-xs font-bold text-[#9a2119] hover:bg-[#fdf0ee]"
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : (
+                "Loading exam details..."
+              )}
+            </div>
+          ) : !examSections.length ? (
             <div className="rounded-[26px] border border-[#f0e4e2] bg-white p-6 text-sm text-gray-500">
               No description available.
             </div>
@@ -590,9 +670,9 @@ if (selectedExam) {
 
         {loading ? <div className="py-10 text-center text-gray-500">Loading entrance exams...</div> : null}
         <div className="content-stagger grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {!loading && filtered.map((item, index) => {
+          {!loading && filtered.map((item) => {
             const isPreviewMode = moduleMode === "preview";
-            const isFree = !isPreviewMode || index < 4;
+            const isFree = !isPreviewMode || isPreviewFree(previewFreeKeys, item);
 
             return (
            <div
@@ -635,7 +715,7 @@ if (selectedExam) {
     return;
   }
 
-  setSelectedExam(item);
+  openExam(item);
 }}
                   className=" py-1 text-sm font-bold text-[#9a2119] "
                 >

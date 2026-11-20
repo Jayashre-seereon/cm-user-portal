@@ -8,6 +8,8 @@ import { getMasterClasses,
 import { masterClasses as fallbackMasterClasses } from "../../../data/careermapData";
 import { ModuleScreen, PageHero, SoftTag } from "../../../components/ui";
 import { useAppState } from "../../../state/AppStateContext";
+import { buildFreeKeys, isVideoUnlocked, sortNewestFirst } from "../../../utils/previewAccess";
+import { buildDashboardModules } from "../../../utils/dashboard";
 import { UnlockRedirectModal, usePortalNavigation } from "../../portal/components/portalPageShared";
 // import { useLocation } from "react-router-dom";
 function formatViews(views) {
@@ -116,13 +118,20 @@ function MasterClassCard({ item, unlocked, detailUnlocked, onWatch }) {
 
 
 export default function LearnPage() {
-  const { canAccessFreeDetail, registerFreeDetailAccess } = useAppState();
+  const { canAccessFreeDetail, registerFreeDetailAccess, dashboardData } = useAppState();
   const { navigate, location, goToDashboard } = usePortalNavigation();
   const [params, setSearchParams] = useSearchParams();
 const pageLocation = useLocation();
 
+// The server only sends each video's lock flags when the request says which module it is for.
+// A page opened without navigation state (the navbar falls back to that when its access check
+// fails or times out, or a typed address) must therefore find the module id itself.
+const dashboardModuleId = useMemo(
+  () => buildDashboardModules(dashboardData?.modules || []).find((card) => card.route === "/app/learn")?.id,
+  [dashboardData]
+);
 const MASTERCLASS_MODULE_ID =
-  pageLocation.state?.moduleId;
+  pageLocation.state?.moduleId ?? dashboardModuleId;
 
 const accessStatus =
   pageLocation.state?.accessStatus ||
@@ -130,12 +139,15 @@ const accessStatus =
 
 
 const unlocked =
-  accessStatus === "unlocked";
+  accessStatus === "unlocked" || accessStatus === "full";
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [videoType, setVideoType] = useState("All");
   const [sortBy, setSortBy] = useState("newest");
+  // In preview the free videos are the 4 newest of the FULL list (the default order), like
+  // the other modules - not the first 4 of whatever the type tab / A-Z / search shows.
+  const previewFreeKeys = useMemo(() => buildFreeKeys(sortNewestFirst(items)), [items]);
   const [unlockModalItem, setUnlockModalItem] = useState(null);
 
   useEffect(() => {
@@ -164,7 +176,8 @@ const unlocked =
     return () => {
       active = false;
     };
-  }, []);
+    // Reload once the module id is known so the list comes back with its lock flags.
+  }, [MASTERCLASS_MODULE_ID]);
 
   useEffect(() => {
     const nextVideoType = params.get("videoType");
@@ -244,7 +257,19 @@ const unlocked =
           <h1 className="m-0 text-2xl font-black text-[#9a2119]">Career &amp; Personality Videos</h1>
           <p className="mt-1 text-sm text-[#8c6c67]">Explore career and personality videos.</p>
         </div>
-        <PageHero backOnly onBack={() => navigate(pageLocation.state?.fromGlobalSearch ? (pageLocation.state.returnTo || "/app/dashboard") : "/app/dashboard")} className="shrink-0" />
+        <PageHero
+          backOnly
+          onBack={() => {
+            // From global search on ANOTHER page -> back there. If the search was made from
+            // this very page, that target is this page (a no-op), so go to the dashboard.
+            const returnTo = pageLocation.state?.returnTo;
+            const returnPath = String(returnTo || "").split("?")[0];
+            const backToSearchOrigin =
+              pageLocation.state?.fromGlobalSearch && returnTo && returnPath !== pageLocation.pathname;
+            navigate(backToSearchOrigin ? returnTo : "/app/dashboard");
+          }}
+          className="shrink-0"
+        />
       </div>
       {error ? <Alert type="warning" message={error} showIcon style={{ borderRadius: 16 }} /> : null}
 
@@ -310,7 +335,13 @@ const unlocked =
           </div>
         ) : null}
 
-        {!loading && filtered.map((item) => {
+        {!loading && filtered.map((listItem) => {
+  // A video is unlocked only if the user has full access (the server says "full"), or it is
+  // one of the free ones (the 4 newest, or marked free by the admin). Anything else is
+  // locked - including a video that came back with NO lock flag at all, so a missing flag
+  // can never unlock it. Filters and sorting don't change this.
+  const videoUnlocked = isVideoUnlocked(listItem, { fullAccess: unlocked, freeKeys: previewFreeKeys });
+  const item = { ...listItem, locked: !videoUnlocked, isFree: videoUnlocked };
   const detailUnlocked =
   unlocked ||
   item.isFree;

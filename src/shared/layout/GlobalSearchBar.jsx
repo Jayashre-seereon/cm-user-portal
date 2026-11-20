@@ -3,8 +3,10 @@ import {
   BookOutlined,
   BulbOutlined,
   CloseCircleFilled,
+  EyeOutlined,
   GlobalOutlined,
   LoadingOutlined,
+  LockOutlined,
   NotificationOutlined,
   QuestionCircleOutlined,
   ReadOutlined,
@@ -12,14 +14,21 @@ import {
   SearchOutlined,
   TeamOutlined,
   TrophyOutlined,
+  UnlockOutlined,
 } from "@ant-design/icons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { globalSearch } from "../../api/searchApi";
 import { resolveNavigationTarget } from "../../utils/searchNavigation";
+import {
+  getPreviewAccessKind,
+  getPreviewLimit,
+  loadPreviewFreeKeys,
+  resolvePreviewAccess,
+} from "../../utils/previewAccess";
 import { useAppState } from "../../state/AppStateContext";
 import { checkModuleAccess } from "../../api/moduleAccessApi";
-import { buildDashboardModules } from "../../utils/dashboard";
+import { buildDashboardModules, moduleRouteMap } from "../../utils/dashboard";
 import { UnlockRedirectModal } from "../../features/portal/components/portalPageShared";
 import { moduleCards } from "../../data/careermapData";
 
@@ -187,6 +196,120 @@ function ItemThumbnail({ item, config }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Module access (lock / preview) for search results
+//
+// The dashboard marks every module Unlocked / Preview / Locked. A search result
+// that opens one specific page inside a module (an exam, institute, scholarship,
+// career, ...) must follow the same rules as that module's own list:
+//   Locked module   -> every result is locked.
+//   Preview module  -> each result is free or locked exactly as the module list shows
+//                      it (see utils/previewAccess.js), so search is neither a back door
+//                      into locked pages nor a false lock on free ones.
+//   Unlocked module -> open.
+// ---------------------------------------------------------------------------
+const MODULE_ROUTES = new Set(
+  Object.values(moduleRouteMap).filter((route) => route !== "/app/subscription")
+);
+
+const LOCKED_BADGE = {
+  label: "Locked",
+  locked: true,
+  icon: <LockOutlined />,
+  className: "border-red-200 bg-red-50 text-red-700",
+};
+
+const PREVIEW_BADGE = {
+  label: "Preview",
+  locked: false,
+  icon: <EyeOutlined />,
+  className: "border-blue-200 bg-blue-50 text-blue-700",
+};
+
+const FREE_BADGE = {
+  label: "Unlocked",
+  locked: false,
+  icon: <UnlockOutlined />,
+  className: "border-green-200 bg-green-50 text-green-700",
+};
+
+// Shown while a preview module's free items are still loading, instead of nothing (which
+// would look like "unlocked").
+const CHECKING_BADGE = {
+  label: "Checking",
+  locked: false,
+  icon: <LoadingOutlined spin />,
+  className: "border-gray-200 bg-gray-50 text-gray-500",
+};
+
+// Lists small enough to load as soon as the search box opens (not the large exam list).
+const WARM_PREVIEW_ROUTES = [
+  "/app/institutes",
+  "/app/quiz",
+  "/app/abroad",
+  "/app/newsletter",
+  "/app/book-mentor",
+  "/app/learn",
+];
+
+const PREVIEW_LOCK_MESSAGE =
+  "This page is locked. Please purchase a subscription to open";
+const VERIFY_FAILED_MESSAGE =
+  "We couldn't verify your access right now. Please try again in a moment.";
+
+function normalizeAccessStatus(status) {
+  const value = String(status || "").toLowerCase();
+  if (value === "unlocked" || value === "full") return "unlocked";
+  if (value === "preview") return "preview";
+  if (value === "locked") return "locked";
+  return null;
+}
+
+// Search results that open one specific page inside a module (not a module card).
+function isDirectSearchResult(item = {}) {
+  const itemType = String(item.type || "").toLowerCase();
+  const itemGroup = String(item.group || "").toLowerCase();
+  const isInstituteResult =
+    ["institution", "institute", "institutes", "college", "colleges"].includes(itemType) ||
+    ["institutions", "colleges"].includes(itemGroup);
+  const isExamResult =
+    ["entranceexam", "entranceexams", "exam", "exams"].includes(itemType) ||
+    ["entranceexams", "exams"].includes(itemGroup);
+  const isScholarshipResult =
+    ["scholarship", "scholarships"].includes(itemType) || itemGroup === "scholarships";
+  const isVideoResult =
+    ["masterclass", "masterclasses", "learn", "video", "videos"].includes(itemType) ||
+    ["masterclasses", "learn", "videos"].includes(itemGroup);
+  const isQuizResult = ["quiz", "quizzes"].includes(itemType) || itemGroup === "quizzes";
+  const isNewsletterResult =
+    ["newsletter", "newsletters"].includes(itemType) || itemGroup === "newsletters";
+  const isStudyAbroadResult =
+    ["studyabroad", "study_abroad", "abroad"].includes(itemType) ||
+    ["studyabroad", "study_abroad", "abroad"].includes(itemGroup);
+  const isMentorResult = ["mentor", "mentors"].includes(itemType) || itemGroup === "mentors";
+  const isCareerResult =
+    ["careers", "career"].includes(itemGroup) ||
+    ["career", "stream", "category", "secondcategory", "subcategory", "careerpath"].includes(itemType);
+  return (
+    isCareerResult ||
+    isInstituteResult ||
+    isExamResult ||
+    isScholarshipResult ||
+    isMentorResult ||
+    isVideoResult ||
+    isQuizResult ||
+    isNewsletterResult ||
+    isStudyAbroadResult
+  );
+}
+
+// In-app path a result opens (without query string), or null for external links.
+function getSearchResultPath(item) {
+  const url = resolveNavigationTarget(item);
+  if (!url || /^https?:\/\//i.test(url)) return null;
+  return url.split("?")[0].replace(/\/$/, "");
+}
+
 export default function GlobalSearchBar({ className = "" }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -208,6 +331,88 @@ export default function GlobalSearchBar({ className = "" }) {
     query: "",
   });
   const [lockedModule, setLockedModule] = useState(null);
+
+  // Dashboard modules (with their Unlocked / Preview / Locked status) keyed by route
+  const moduleByRoute = useMemo(() => {
+    const map = new Map();
+    buildDashboardModules(dashboardData?.modules || []).forEach((module) => {
+      if (!map.has(module.route)) map.set(module.route, module);
+    });
+    return map;
+  }, [dashboardData]);
+
+  // Free items of each preview module whose list decides "first N are free", keyed by
+  // route. `false` marks a failed load so a result can stop saying "Checking".
+  const [freeKeysByRoute, setFreeKeysByRoute] = useState({});
+
+  // Load one module's free items (loadPreviewFreeKeys caches them for a few minutes).
+  function fetchFreeKeys(route, isActive) {
+    loadPreviewFreeKeys(route)
+      .then((keys) => {
+        if (isActive()) {
+          setFreeKeysByRoute((prev) => (prev[route] === keys ? prev : { ...prev, [route]: keys }));
+        }
+      })
+      .catch((error) => {
+        console.error("Could not load free preview items:", error);
+        if (isActive()) {
+          setFreeKeysByRoute((prev) => (prev[route] === false ? prev : { ...prev, [route]: false }));
+        }
+      });
+  }
+
+  // Results from a preview module: make sure that module's free items are known.
+  useEffect(() => {
+    const routes = new Set();
+    searchData.results.forEach((item) => {
+      if (!isDirectSearchResult(item)) return;
+      const path = getSearchResultPath(item);
+      const status = normalizeAccessStatus(path ? moduleByRoute.get(path)?.accessStatus : null);
+      if (status === "preview" && getPreviewAccessKind(path) === "list") routes.add(path);
+    });
+
+    let active = true;
+    routes.forEach((route) => fetchFreeKeys(route, () => active));
+    return () => {
+      active = false;
+    };
+  }, [searchData.results, moduleByRoute]);
+
+  // When the search box opens, warm up the small lists so results can show Unlocked /
+  // Locked straight away (the large exam list is only loaded once an exam result appears).
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    let active = true;
+    WARM_PREVIEW_ROUTES.forEach((route) => {
+      if (normalizeAccessStatus(moduleByRoute.get(route)?.accessStatus) === "preview") {
+        fetchFreeKeys(route, () => active);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [isOpen, moduleByRoute]);
+
+  // Badge shown on a result, mirroring the module cards and lists.
+  function getAccessBadge(item) {
+    const path = getSearchResultPath(item);
+    const module = path ? moduleByRoute.get(path) : null;
+    const status = normalizeAccessStatus(module?.accessStatus);
+    if (!status || status === "unlocked") return null;
+    if (status === "locked") return LOCKED_BADGE;
+
+    // Preview module: the module card itself is enterable, like on the dashboard.
+    if (String(item.type || "").toLowerCase() === "module") return PREVIEW_BADGE;
+    if (!isDirectSearchResult(item)) return null;
+
+    // A specific page: free or locked exactly as the module's own list shows it.
+    const freeKeys = freeKeysByRoute[path];
+    const access = resolvePreviewAccess(item, path, { freeKeys: freeKeys || undefined });
+    if (access === "locked") return LOCKED_BADGE;
+    if (access === "free") return FREE_BADGE;
+    if (access === "pending") return freeKeys === false ? null : CHECKING_BADGE;
+    return null; // the module's page checks with the server when the item is opened
+  }
 
   // Debounced API search effect
   useEffect(() => {
@@ -421,29 +626,7 @@ export default function GlobalSearchBar({ className = "" }) {
     const resolvedUrl = resolveNavigationTarget(item);
     const resolvedPath = resolvedUrl.split("?")[0].replace(/\/$/, "");
     const itemType = String(item.type || "").toLowerCase();
-    const isInstituteResult =
-      ["institution", "institute", "institutes", "college", "colleges"].includes(itemType) ||
-      ["institutions", "colleges"].includes(String(item.group || "").toLowerCase());
-    const isExamResult =
-      ["entranceexam", "entranceexams", "exam", "exams"].includes(itemType) ||
-      ["entranceexams", "exams"].includes(String(item.group || "").toLowerCase());
-    const isScholarshipResult =
-      ["scholarship", "scholarships"].includes(itemType) ||
-      String(item.group || "").toLowerCase() === "scholarships";
-    const itemGroup = String(item.group || "").toLowerCase();
-    const isVideoResult =
-      ["masterclass", "masterclasses", "learn", "video", "videos"].includes(itemType) ||
-      ["masterclasses", "learn", "videos"].includes(itemGroup);
-    const isQuizResult = ["quiz", "quizzes"].includes(itemType) || itemGroup === "quizzes";
-    const isNewsletterResult = ["newsletter", "newsletters"].includes(itemType) || itemGroup === "newsletters";
-    const isStudyAbroadResult =
-      ["studyabroad", "study_abroad", "abroad"].includes(itemType) ||
-      ["studyabroad", "study_abroad", "abroad"].includes(itemGroup);
-    const isMentorResult = ["mentor", "mentors"].includes(itemType) || itemGroup === "mentors";
-    const isCareerResult =
-      ["careers", "career"].includes(itemGroup) ||
-      ["career", "stream", "category", "secondcategory", "subcategory", "careerpath"].includes(itemType);
-    const isDirectResult = isCareerResult || isInstituteResult || isExamResult || isScholarshipResult || isMentorResult || isVideoResult || isQuizResult || isNewsletterResult || isStudyAbroadResult;
+    const isDirectResult = isDirectSearchResult(item);
     const returnTo = `${location.pathname}${location.search}`;
     const searchNavigationState = {
       fromGlobalSearch: isDirectResult,
@@ -464,14 +647,32 @@ export default function GlobalSearchBar({ className = "" }) {
       window.location.href = targetUrl;
     } else {
       const targetPath = targetUrl.split("?")[0].replace(/\/$/, "");
-      const modules = buildDashboardModules(dashboardData?.modules || []);
-      const targetModule = modules.find((module) => module.route === targetPath);
+      const targetModule = moduleByRoute.get(targetPath);
       if (targetModule?.id) {
         try {
           const response = await checkModuleAccess(targetModule.id);
           if (!response?.allowed) {
             setLockedModule({ title: targetModule.title });
             return;
+          }
+          // In preview, a specific page opens from search only if the module's own list
+          // shows that item as free. The page itself can't be trusted to enforce this: some
+          // pages pin the searched item to the top of their list, which makes it look free.
+          if (isDirectResult && response.mode !== "full") {
+            const kind = getPreviewAccessKind(targetPath);
+            const freeKeys =
+              kind === "list"
+                ? await loadPreviewFreeKeys(targetPath, getPreviewLimit(targetPath, response))
+                : undefined;
+            const access = resolvePreviewAccess(item, targetPath, { freeKeys });
+            if (access === "locked") {
+              setLockedModule({
+                title: targetModule.title,
+                itemLabel: item.title,
+                message: PREVIEW_LOCK_MESSAGE,
+              });
+              return;
+            }
           }
           navigate(targetUrl, {
             state: {
@@ -482,10 +683,30 @@ export default function GlobalSearchBar({ className = "" }) {
           });
         } catch (error) {
           console.error("Could not validate module access:", error);
+          if (isDirectResult) {
+            // Can't confirm access -> don't open the inner page.
+            setLockedModule({
+              title: targetModule.title,
+              itemLabel: "",
+              heading: "Unable to verify access",
+              message: VERIFY_FAILED_MESSAGE,
+            });
+            return;
+          }
           navigate(targetUrl, {
             state: { moduleId: targetModule.id, ...searchNavigationState },
           });
         }
+        return;
+      }
+      if (isDirectResult && MODULE_ROUTES.has(targetPath)) {
+        // Module access hasn't loaded yet (or failed to) -> don't let search bypass the lock.
+        setLockedModule({
+          title: item.title,
+          itemLabel: "",
+          heading: "Unable to verify access",
+          message: VERIFY_FAILED_MESSAGE,
+        });
         return;
       }
       navigate(targetUrl, { state: searchNavigationState });
@@ -645,6 +866,7 @@ export default function GlobalSearchBar({ className = "" }) {
                 {filteredResults.map((item, index) => {
                   const config = getTypeConfig(item);
                   const isHighlighted = highlightedIndex === index;
+                  const accessBadge = getAccessBadge(item);
 
                   return (
                     <div
@@ -674,6 +896,14 @@ export default function GlobalSearchBar({ className = "" }) {
                           >
                             {config.label}
                           </span>
+                          {accessBadge && (
+                            <span
+                              className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${accessBadge.className}`}
+                            >
+                              {accessBadge.icon}
+                              {accessBadge.label}
+                            </span>
+                          )}
                         </div>
 
                         {item.subtitle && (
@@ -689,10 +919,16 @@ export default function GlobalSearchBar({ className = "" }) {
                         )}
                       </div>
 
-                      {/* Right Chevron */}
-                      <div className="shrink-0 text-gray-300 transition-colors group-hover:text-[#9a2119]">
-                        <RightOutlined className="text-[12px]" />
-                      </div>
+                      {/* Right: lock for locked pages, chevron otherwise */}
+                      {accessBadge?.locked ? (
+                        <div className="shrink-0 text-red-400">
+                          <LockOutlined className="text-[13px]" />
+                        </div>
+                      ) : (
+                        <div className="shrink-0 text-gray-300 transition-colors group-hover:text-[#9a2119]">
+                          <RightOutlined className="text-[12px]" />
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -735,9 +971,12 @@ export default function GlobalSearchBar({ className = "" }) {
       )}
       <UnlockRedirectModal
         open={Boolean(lockedModule)}
-        title="Module Locked"
-        itemLabel={lockedModule?.title}
-        description="This module is locked. Please purchase a subscription to continue accessing this module."
+        title={lockedModule?.heading || "Module Locked"}
+        itemLabel={lockedModule?.itemLabel ?? lockedModule?.title}
+        description={
+          lockedModule?.message ||
+          "This module is locked. Please purchase a subscription to continue accessing this module."
+        }
         onCancel={() => setLockedModule(null)}
         onConfirm={() => {
           setLockedModule(null);

@@ -164,7 +164,14 @@ useEffect(() => {
         );
         if (exact.length === 1) found = exact[0];
       }
-      if (found) setSelectedItem(found);
+      if (found) {
+        // A deep link (global search, shared URL) must respect the same lock as the list.
+        if (isScholarshipLocked(found)) {
+          setUnlockModalItem(found.name);
+        } else {
+          setSelectedItem(found);
+        }
+      }
     }
   }, [items, loading, location.search, location.state]);
 
@@ -355,7 +362,21 @@ const filtered = useMemo(
         ) : null}
 
         <div className="flex justify-end">
-          <PageHero backOnly onBack={() => navigate(pageLocation.state?.fromGlobalSearch ? (pageLocation.state.returnTo || "/app/dashboard") : -1)} />
+          <PageHero
+            backOnly
+            onBack={() => {
+              // From global search on ANOTHER page -> back there. If the search was made from
+              // this very page, that target is this page (a no-op), so just close the detail.
+              const returnTo = pageLocation.state?.returnTo;
+              const returnPath = String(returnTo || "").split("?")[0];
+              if (pageLocation.state?.fromGlobalSearch) {
+                if (returnTo && returnPath !== pageLocation.pathname) navigate(returnTo);
+                else setSelectedItem(null);
+                return;
+              }
+              navigate(-1);
+            }}
+          />
         </div>
         {error ? <Alert type="warning" title={error} showIcon style={{ borderRadius: 16 }} /> : null}
 
