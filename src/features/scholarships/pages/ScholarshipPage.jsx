@@ -597,7 +597,7 @@ const filtered = useMemo(
           <Tabs
             activeKey={activeStatus}
             onChange={setActiveStatus}
-            items={["All", "Active", "Expired"].map((key) => ({ key, label: key }))}
+            items={["All", "Active", "Expired"].map((key) => ({ key, label: key === "Expired" ? "Inactive" : key }))}
             className="mb-0 [&_.ant-tabs-nav]:!mb-0 [&_.ant-tabs-tab]:!px-1.5 [&_.ant-tabs-tab]:font-semibold [&_.ant-tabs-tab]:text-[10px] [&_.ant-tabs-tab]:uppercase [&_.ant-tabs-tab]:tracking-wider sm:[&_.ant-tabs-tab]:!px-3 sm:[&_.ant-tabs-tab]:text-xs sm:[&_.ant-tabs-tab]:tracking-widest [&_.ant-tabs-tab:last-child]:!mr-2 sm:[&_.ant-tabs-tab:last-child]:!mr-0 [&_.ant-tabs-tab-active_.ant-tabs-tab-btn]:!text-[#9a2119] [&_.ant-tabs-ink-bar]:!bg-[#9a2119] [&_.ant-tabs-nav::before]:!border-[#f0e4e2]"
           />
           <PageHero backOnly onBack={goToDashboard} className="shrink-0 pl-1 sm:pl-0" />
