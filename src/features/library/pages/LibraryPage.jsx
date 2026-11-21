@@ -1765,7 +1765,9 @@ useEffect(() => {
       goToDashboard();
       return;
     }
-    if (currentLevel === "details" && !hasSubscriptionAccess) setModuleStatus("locked");
+    // Do NOT flip the page to "locked" here: that made every card and the next career
+    // detail show "Subscription required" after one Back, even for free categories.
+    // What is free is decided per page by the server (preview session / accessTier).
     window.history.back();
   }
 
