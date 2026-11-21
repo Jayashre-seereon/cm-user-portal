@@ -33,7 +33,7 @@ export default function FloatingContactActions() {
     </div>
     <Modal title="How Can We Help You?" open={open} onCancel={() => setOpen(false)} footer={null} destroyOnHidden>
        <Input.TextArea rows={4} maxLength={5000} showCount value={text} onChange={(event) => setText(event.target.value)} placeholder="Write your message" />
-      <div className="mt-4 flex justify-end"><Button type="primary" loading={sending} disabled={!text.trim()} onClick={submit}>How Can We Help You?</Button></div>
+      <div className="mt-4 flex justify-end"><Button type="primary" loading={sending} disabled={!text.trim()} onClick={submit}>Send</Button></div>
     </Modal>
   </>;
 }

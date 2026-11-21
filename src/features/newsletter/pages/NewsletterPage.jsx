@@ -276,9 +276,14 @@ const deepLinkNotFound = useMemo(() => {
     <ModuleScreen className="space-y-5">
       
 
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="m-0 text-2xl font-black text-[#9a2119]">Career Insights</h1>
+          <p className="mt-1 text-sm text-[#8c6c67]">Weekly and quarterly career news bulletins.</p>
+        </div>
         <PageHero
           backOnly
+          className="shrink-0"
           onBack={() => {
             // From global search on ANOTHER page -> back there. If the search was made from
             // this very page, that target is this page (a no-op), so go to the dashboard.
