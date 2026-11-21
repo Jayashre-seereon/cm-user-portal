@@ -330,7 +330,7 @@ body {
   align-items: center;
   padding: 6px 14px;
   font-weight: 800;
-  font-size: 0.72rem;
+  font-size: 0.78rem; /* same size for every left-side card title */
   text-transform: uppercase;
   letter-spacing: 0.02em;
   line-height: 1.1;
@@ -651,7 +651,7 @@ body {
   display: flex;
   gap: 16px;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 20px;
 }
 
 .trait-card-left {
@@ -669,7 +669,7 @@ body {
   align-items: center;
   padding: 9px 12px;
   font-weight: 800;
-  font-size: 0.82rem;
+  font-size: 0.78rem; /* same size for every left-side card title */
   text-transform: uppercase;
   letter-spacing: 0.02em;
   line-height: 1.15;
@@ -693,6 +693,10 @@ body {
 }
 
 .trait-card-band.moderate {
+  color: #9E6B1D;
+}
+
+.trait-card-band.developing {
   color: #9E6B1D;
 }
 
