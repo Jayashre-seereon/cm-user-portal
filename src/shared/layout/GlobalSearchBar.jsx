@@ -396,6 +396,8 @@ export default function GlobalSearchBar({ className = "" }) {
   // Badge shown on a result, mirroring the module cards and lists.
   function getAccessBadge(item) {
     const path = getSearchResultPath(item);
+    // The assessment page is always enterable (past reports); it handles its own lock.
+    if (path === "/app/assessment") return null;
     const module = path ? moduleByRoute.get(path) : null;
     const status = normalizeAccessStatus(module?.accessStatus);
     if (!status || status === "unlocked") return null;
@@ -648,7 +650,8 @@ export default function GlobalSearchBar({ className = "" }) {
     } else {
       const targetPath = targetUrl.split("?")[0].replace(/\/$/, "");
       const targetModule = moduleByRoute.get(targetPath);
-      if (targetModule?.id) {
+      // The assessment page handles its own lock state, so it is never blocked here.
+      if (targetModule?.id && targetPath !== "/app/assessment") {
         try {
           const response = await checkModuleAccess(targetModule.id);
           if (!response?.allowed) {
@@ -699,7 +702,7 @@ export default function GlobalSearchBar({ className = "" }) {
         }
         return;
       }
-      if (isDirectResult && MODULE_ROUTES.has(targetPath)) {
+      if (isDirectResult && MODULE_ROUTES.has(targetPath) && targetPath !== "/app/assessment") {
         // Module access hasn't loaded yet (or failed to) -> don't let search bypass the lock.
         setLockedModule({
           title: item.title,

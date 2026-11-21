@@ -101,15 +101,9 @@ export function ExploreModulesSection({ modules = [], loading = false }) {
       return;
     }
 
+    // Always open the assessment page, even when locked: it shows the student's past
+    // reports and its own "buy a plan to (re)take the test" prompt.
     if (isCareerPsychometricAssessment(card.title)) {
-      if (effectiveStatus === "locked") {
-        setLockedModule({
-          title: card.title,
-          message: "This module is locked. Please purchase a subscription to continue accessing this module.",
-        });
-        return;
-      }
-
       navFunc(card.route, {
         state: {
           accessStatus: effectiveStatus,

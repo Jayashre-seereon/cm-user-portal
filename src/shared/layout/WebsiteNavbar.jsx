@@ -92,8 +92,10 @@ export default function WebsiteNavbar() {
     const curated = buildDashboardModules(dashboardData?.modules || []);
     const matchedModule = curated.find((card) => card.route === routePath);
 
-    if (!matchedModule?.id) {
-      navigate(routePath);
+    // The assessment page handles its own lock state (past reports + "buy a plan to
+    // (re)take"), so open it even when the test is locked.
+    if (!matchedModule?.id || routePath === "/app/assessment") {
+      navigate(routePath, matchedModule?.id ? { state: { moduleId: matchedModule.id } } : undefined);
       return;
     }
 
