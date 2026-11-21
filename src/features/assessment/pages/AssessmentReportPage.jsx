@@ -308,7 +308,7 @@ const rankedDomains = (items, fallbackItems, minScore = 45, labels = {}) => {
   ], 45, { Num: "Numerical Aptitude", Log: "Logical Aptitude", Verb: "Verbal Aptitude", Voc: "Vocabulary Aptitude", Mech: "Mechanical Aptitude", Spat: "Spatial Aptitude" });
   const goalOrientationLabel = longPct >= shortPct ? "LONG TERM" : "SHORT TERM";
 const topPersonalityTrait = [...domainPerson].sort((a, b) => scoreFor(b) - scoreFor(a))[0];
-const goalOrientationSummary = Math.abs(longPct - shortPct) <= 10 ? "Balanced Planner" : (longPct > shortPct ? "Long-Term Visionary" : "Short-Term Achiever");
+const goalOrientationSummary = Math.abs(longPct - shortPct) <= 10 ? "Balanced Planner" : (longPct > shortPct ? "Long-Term" : "Short-Term");
   // 5 Top Default fallback clusters matching the PDF
   const sampleTop5 = [
     {
