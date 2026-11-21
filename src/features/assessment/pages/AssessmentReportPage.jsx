@@ -812,9 +812,6 @@ const goalOrientationSummary = Math.abs(longPct - shortPct) <= 10 ? "Balanced Pl
               Your interests are the areas and activities that naturally capture your attention, curiosity, and motivation. They go beyond hobbies and point to the type of work where you will feel engaged and satisfied. The RIASEC model outlines six interest areas—Realistic, Investigative, Artistic, Social, Enterprising, and Conventional—each reflecting different strengths and preferences. Most individuals show a combination of these. Understanding your interest profile helps you explore careers that align with what inspires you, making work more enjoyable, learning more natural, and success more fulfilling.
             </p>
 
-            <div className="text-center font-bold text-base text-[#1E232A] mb-1">
-              RIASEC Model
-            </div>
 
             {/* Concentric RIASEC Rings Diagram matching PDF */}
             <div className="flex-1 py-2 flex justify-center items-center">
@@ -1599,41 +1596,42 @@ const goalOrientationSummary = Math.abs(longPct - shortPct) <= 10 ? "Balanced Pl
               Your aptitude reflects your natural ability to learn, understand, and apply different skills. While interests show what you enjoy, aptitudes indicate what you can do well with practice. They are not fixed and can improve with training, but knowing your strongest aptitudes helps you identify areas where success may come more easily. Aptitude plays a key role in choosing a career because it shows which tasks, problem-solving styles, and skills will feel more comfortable and rewarding.
             </p>
             <div className="font-bold text-sm text-[#111827] mb-2">
-              In this test, we assess six types of aptitudes:
+              In this section, six types of aptitudes are assessed.
             </div>
 
             {/* 6 Hanging Clip Badges matching PDF Page 20 */}
-            <div className="my-2 flex justify-center items-center overflow-hidden">
+            <div className="my-5 mx-auto w-full overflow-hidden" style={{ aspectRatio: "1536 / 360" }}>
+              {/* report_6.png is mostly blank above/below the cards: show only the cards band */}
               <img
                 src={ReportImg6}
                 alt="Aptitude Categories"
-                className="w-full object-contain scale-100 max-w-[540px] mx-auto"
+                className="h-full w-full object-cover object-center"
               />
             </div>
 
             {/* 4 Summary Cards matching PDF */}
-            <div className="grid grid-cols-2 gap-4 mt-3">
-              <div className="rounded-xl border border-[#8C1814] overflow-hidden">
+            <div className="grid grid-cols-2 gap-5 mt-5">
+              <div className="flex flex-col rounded-xl border border-[#8C1814] overflow-hidden">
                 <div className="bg-[#8C1814] text-white p-2 text-center text-xs font-black uppercase">MECHANICAL APTITUDE</div>
-                <div className="p-3 text-xs leading-relaxed text-[#374151] bg-[#FDF4F3]">
+                <div className="flex-1 min-h-[110px] p-3 text-xs leading-relaxed text-[#374151] bg-[#FDF4F3]">
                   This shows how easily you understand machines, tools, and physical systems. If strong here, you may enjoy careers in engineering, mechanics, or technology where practical problem-solving is needed.
                 </div>
               </div>
-              <div className="rounded-xl border border-[#8C1814] overflow-hidden">
+              <div className="flex flex-col rounded-xl border border-[#8C1814] overflow-hidden">
                 <div className="bg-[#8C1814] text-white p-2 text-center text-xs font-black uppercase">LOGICAL APTITUDE</div>
-                <div className="p-3 text-xs leading-relaxed text-[#374151] bg-[#FDF4F3]">
+                <div className="flex-1 min-h-[110px] p-3 text-xs leading-relaxed text-[#374151] bg-[#FDF4F3]">
                   This reflects your ability to think critically, recognize patterns, and solve problems step by step. Strong logical reasoning is valuable in coding, mathematics, law, and research careers.
                 </div>
               </div>
-              <div className="rounded-xl border border-[#8C1814] overflow-hidden">
+              <div className="flex flex-col rounded-xl border border-[#8C1814] overflow-hidden">
                 <div className="bg-[#8C1814] text-white p-2 text-center text-xs font-black uppercase">VERBAL APTITUDE</div>
-                <div className="p-3 text-xs leading-relaxed text-[#374151] bg-[#FDF4F3]">
+                <div className="flex-1 min-h-[110px] p-3 text-xs leading-relaxed text-[#374151] bg-[#FDF4F3]">
                   This measures how well you can express ideas, understand language, and communicate clearly. Strong verbal skills are useful in teaching, law, media, and leadership roles.
                 </div>
               </div>
-              <div className="rounded-xl border border-[#8C1814] overflow-hidden">
+              <div className="flex flex-col rounded-xl border border-[#8C1814] overflow-hidden">
                 <div className="bg-[#8C1814] text-white p-2 text-center text-xs font-black uppercase">VOCABULARY APTITUDE</div>
-                <div className="p-3 text-xs leading-relaxed text-[#374151] bg-[#FDF4F3]">
+                <div className="flex-1 min-h-[110px] p-3 text-xs leading-relaxed text-[#374151] bg-[#FDF4F3]">
                   This shows the strength of your word knowledge and ability to use language effectively. It supports careers that rely on reading, writing, public speaking, or persuasion.
                 </div>
               </div>
@@ -1651,16 +1649,16 @@ const goalOrientationSummary = Math.abs(longPct - shortPct) <= 10 ? "Balanced Pl
 
           <div className="pdf-page-body space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="rounded-xl border border-[#8C1814] overflow-hidden">
+              <div className="flex flex-col rounded-xl border border-[#8C1814] overflow-hidden">
                 <div className="bg-[#8C1814] text-white p-2 text-center text-xs font-black uppercase">NUMERICAL APTITUDE</div>
-                <div className="p-3 text-xs leading-relaxed text-[#374151] bg-[#FDF4F3]">
-                  <p className="mb-2">This measures comfort with numbers, calculations, and quantitative reasoning. It is crucial in careers related to finance, data science, economics, and technology.</p>
-                  <p>By identifying your aptitudes, you can better understand where your natural strengths lie and how to build on them. A career that matches both your interests and aptitudes allows you to learn faster, perform better, and feel more confident in your abilities.</p>
+                <div className="flex-1 min-h-[110px] p-3 text-xs leading-relaxed text-[#374151] bg-[#FDF4F3]">
+                  <div className="mb-2">This measures comfort with numbers, calculations, and quantitative reasoning. It is crucial in careers related to finance, data science, economics, and technology.</div>
+                  <div>By identifying your aptitudes, you can better understand where your natural strengths lie and how to build on them. A career that matches both your interests and aptitudes allows you to learn faster, perform better, and feel more confident in your abilities.</div>
                 </div>
               </div>
-              <div className="rounded-xl border border-[#8C1814] overflow-hidden">
+              <div className="flex flex-col rounded-xl border border-[#8C1814] overflow-hidden">
                 <div className="bg-[#8C1814] text-white p-2 text-center text-xs font-black uppercase">SPATIAL APTITUDE</div>
-                <div className="p-3 text-xs leading-relaxed text-[#374151] bg-[#FDF4F3]">
+                <div className="flex-1 min-h-[110px] p-3 text-xs leading-relaxed text-[#374151] bg-[#FDF4F3]">
                   This reflects your ability to imagine shapes, designs, and objects in space. Strong spatial skills are important for architecture, design, surgery, engineering, and visual arts.
                 </div>
               </div>
