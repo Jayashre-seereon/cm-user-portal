@@ -432,7 +432,13 @@ export function AppStateProvider({ children }) {
     const signedInUser = useAuthStore.getState().user;
     const signedInId = signedInUser?.id ?? signedInUser?._id ?? null;
     if (ownerIdRef.current != null && signedInId != null && String(ownerIdRef.current) !== String(signedInId)) {
-      setState(() => ({ ...initialState, authenticated: true }));
+      // Keep the profile-completion flag: it was set by the login that caused this reset
+      // and belongs to the NEW user (it drives the dashboard "Complete your profile" prompt).
+      setState((current) => ({
+        ...initialState,
+        authenticated: true,
+        profileIncomplete: current.profileIncomplete,
+      }));
     }
     ownerIdRef.current = signedInId;
 
