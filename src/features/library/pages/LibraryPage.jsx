@@ -1208,6 +1208,19 @@ useEffect(() => {
     });
   }, [previewRemaining]);
 
+  // Leaving a career detail page ends its preview countdown. Otherwise the old timer kept running
+  // and ran out while the NEXT detail page was open, locking a page whose own preview had barely
+  // started. (A timer that has already expired stays expired: the page is locked as before.)
+  const previousLevelRef = useRef(currentLevel);
+  useEffect(() => {
+    if (previousLevelRef.current === "details" && currentLevel !== "details") {
+      previewWasRunningRef.current = false; // so no "Preview Expired" popup for the page we just left
+      setPreviewRemaining(0);
+      setPreviewSessionId(null);
+    }
+    previousLevelRef.current = currentLevel;
+  }, [currentLevel]);
+
   useEffect(() => {
     async function loadAccess() {
       if (!CAREER_LIBRARY_MODULE_ID) return;
