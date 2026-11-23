@@ -18,7 +18,7 @@ import { scholarships as fallbackScholarships } from "../../../data/careermapDat
 import { ModuleScreen, PageHero } from "../../../components/ui";
 import { useAppState } from "../../../state/AppStateContext";
 import { UnlockRedirectModal, usePortalNavigation } from "../../portal/components/portalPageShared";
-import { checkModuleAccess, startPreview } from "../../../api/moduleAccessApi";
+import { checkModuleAccess } from "../../../api/moduleAccessApi";
 import { useBrowserStepHistory } from "../../../shared/useBrowserStepHistory";
 import { useScrollToTopOnChange } from "../../../shared/useScrollToTopOnChange";
 import { sanitizeHtml } from "../../../utils/sanitizeHtml";
@@ -49,9 +49,6 @@ export default function ScholarshipPage() {
   const SCHOLARSHIP_MODULE_ID =  pageLocation.state?.moduleId;// apna scholarship module id
   const [moduleMode, setModuleMode] = useState(accessStatus);
 
-const [previewSessionId, setPreviewSessionId] = useState(null);
-const [previewRemaining, setPreviewRemaining] = useState(0);
-const [previewExpired, setPreviewExpired] = useState(false);
 const [category, setCategory] = useState("");
 const [categories, setCategories] = useState([]);
 const [type, setType] = useState("");
@@ -175,36 +172,8 @@ useEffect(() => {
     }
   }, [items, loading, location.search, location.state]);
 
-  useEffect(() => {
-  if (!previewSessionId || previewExpired) return;
-
-  const timer = setInterval(() => {
-    setPreviewRemaining((prev) => {
-      if (prev <= 1) {
-        clearInterval(timer);
-        setPreviewExpired(true);
-        return 0;
-      }
-
-      return prev - 1;
-    });
-  }, 1000);
-
-  return () => clearInterval(timer);
-}, [previewSessionId, previewExpired]);
-
-useEffect(() => {
-  if (previewExpired && selectedItem) {
-    setUnlockModalItem(selectedItem.name);
-  }
-}, [previewExpired, selectedItem]);
-
-useEffect(() => {
-  if (moduleMode === "preview" && selectedItem && previewRemaining === 0 && !previewExpired) {
-    setPreviewRemaining(15);
-  }
-}, [moduleMode, selectedItem, previewRemaining, previewExpired]);
-
+  // A free scholarship (marked free by the admin) opens fully: there is no 15 second preview timer
+  // on scholarships any more. Only scholarships that are NOT free stay locked.
   function isScholarshipLocked(item) {
     if (moduleMode === "full") {
       return false;
@@ -300,30 +269,12 @@ const filtered = useMemo(
         return;
       }
 
-      if (moduleMode === "full") {
-        const response = await getScholarshipById(item.id);
-        setSelectedItem(response);
-        return;
-      }
-
-      const preview = await startPreview({
-        moduleId: SCHOLARSHIP_MODULE_ID,
-        pageType: "scholarship",
-        pageId: item.id,
-      });
-
-      setPreviewSessionId(preview.previewSessionId);
-      setPreviewRemaining(preview.remainingSeconds ?? preview.previewDurationSeconds ?? 15);
-      setPreviewExpired(false);
-
-      const detail = await getScholarshipById(
-        item.id,
-        SCHOLARSHIP_MODULE_ID,
-        preview.previewSessionId
-      );
-
+      // Same for full access and for a free scholarship: load the detail, no preview session, no timer.
+      const detail = await getScholarshipById(item.id);
       setSelectedItem(detail);
-      registerFreeDetailAccess("scholarship", item.name);
+      if (moduleMode !== "full") {
+        registerFreeDetailAccess("scholarship", item.name);
+      }
     } catch (err) {
       console.error("ERROR =>", err);
     }
@@ -346,21 +297,13 @@ const filtered = useMemo(
   }, [items, params]);
 
   if (selectedItem) {
-    const detailUnlocked = unlocked || canAccessFreeDetail("scholarship", selectedItem.name);
+    // A free scholarship is fully open (no timer), however it was reached: list, search or a link.
+    const detailUnlocked = unlocked || !isScholarshipLocked(selectedItem) || canAccessFreeDetail("scholarship", selectedItem.name);
     const isActive = selectedItem.status === "Active";
     const showCountdown = isActive && typeof selectedItem.daysRemaining === "number" && selectedItem.daysRemaining >= 0;
 
     return (
       <ModuleScreen className="space-y-4">
-       {moduleMode === "preview" && !previewExpired && previewRemaining > 0 ? (
-          <div className="sticky top-0 z-10 mb-4 flex justify-end">
-            <div className="flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 shadow-sm">
-              <ClockCircleOutlined />
-              Preview ends in {previewRemaining}s
-            </div>
-          </div>
-        ) : null}
-
         <div className="flex justify-end">
           <PageHero
             backOnly
