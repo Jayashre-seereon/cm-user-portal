@@ -2554,7 +2554,7 @@ className="inline-flex h-10 w-10 items-center justify-center rounded-full border
       <UnlockRedirectModal
         open={Boolean(unlockModalItem)}
         title="Unlock Career Archive"
-        itemLabel={unlockModalItem ? getItemTitle(unlockModalItem.item) : ""}
+        itemLabel={unlockModalItem?.item ? getItemTitle(unlockModalItem.item) : ""}
         description="Your free Career Archive access has already been used. Subscribe to unlock"
         onCancel={() => {
           const stayHere = unlockModalItem?.stay; // a blocked link: nothing was opened to go back from
