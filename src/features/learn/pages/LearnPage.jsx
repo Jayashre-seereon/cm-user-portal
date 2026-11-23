@@ -8,7 +8,7 @@ import { getMasterClasses,
 import { masterClasses as fallbackMasterClasses } from "../../../data/careermapData";
 import { ModuleScreen, PageHero, SoftTag } from "../../../components/ui";
 import { useAppState } from "../../../state/AppStateContext";
-import { buildFreeKeys, isVideoUnlocked, sortNewestFirst } from "../../../utils/previewAccess";
+import { isVideoUnlocked } from "../../../utils/previewAccess";
 import { buildDashboardModules } from "../../../utils/dashboard";
 import { UnlockRedirectModal, usePortalNavigation } from "../../portal/components/portalPageShared";
 // import { useLocation } from "react-router-dom";
@@ -145,9 +145,6 @@ const unlocked =
   const [error, setError] = useState("");
   const [videoType, setVideoType] = useState("All");
   const [sortBy, setSortBy] = useState("newest");
-  // In preview the free videos are the 4 newest of the FULL list (the default order), like
-  // the other modules - not the first 4 of whatever the type tab / A-Z / search shows.
-  const previewFreeKeys = useMemo(() => buildFreeKeys(sortNewestFirst(items)), [items]);
   const [unlockModalItem, setUnlockModalItem] = useState(null);
 
   useEffect(() => {
@@ -336,11 +333,10 @@ const unlocked =
         ) : null}
 
         {!loading && filtered.map((listItem) => {
-  // A video is unlocked only if the user has full access (the server says "full"), or it is
-  // one of the free ones (the 4 newest, or marked free by the admin). Anything else is
-  // locked - including a video that came back with NO lock flag at all, so a missing flag
-  // can never unlock it. Filters and sorting don't change this.
-  const videoUnlocked = isVideoUnlocked(listItem, { fullAccess: unlocked, freeKeys: previewFreeKeys });
+  // A video is unlocked only if the user has full access (the server says "full"), or the ADMIN
+  // marked it free. There is no "first 4 free" rule for videos. Anything else is locked -
+  // including a video that came back with NO lock flag at all. Filters and sorting don't change this.
+  const videoUnlocked = isVideoUnlocked(listItem, { fullAccess: unlocked });
   const item = { ...listItem, locked: !videoUnlocked, isFree: videoUnlocked };
   const detailUnlocked =
   unlocked ||

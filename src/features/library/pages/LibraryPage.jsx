@@ -437,9 +437,18 @@ function formatDetailEducation(item) {
 }
 
 function normalizeDetailItem(item, index = 0, sourceItem = null) {
+  // A real detail record names itself through its subcategory / second category / category. A
+  // placeholder built from the opened item (a category with no detail records) takes that item's
+  // own name instead of "Career Detail <id>".
+  const relationTitle =
+    item?.subcategory?.title ||
+    item?.secondcategory?.name ||
+    item?.category?.title ||
+    "";
   const title =
+    relationTitle ||
+    (sourceItem ? getItemTitle(sourceItem) : "") ||
     getDetailTitle(item) ||
-    getItemTitle(sourceItem) ||
     `Career Detail ${index + 1}`;
   return {
     id: item?.id ?? sourceItem?.id ?? `${title}-${index}`,
@@ -619,6 +628,12 @@ function LibraryBreadcrumb({
   if (secondCategory) parts.push(secondCategory);
   if (subCategory && level === "details") parts.push(subCategory);
   if (detail && level === "details") parts.push(detail);
+
+  // The opened item can be the same as its parent (a category with no detail records), which
+  // repeated its name twice in a row.
+  for (let i = parts.length - 1; i > 0; i -= 1) {
+    if (parts[i] === parts[i - 1]) parts.splice(i, 1);
+  }
 
   if (!parts.length) return null;
 
@@ -1279,16 +1294,66 @@ useEffect(() => {
           return sessionId ? { ok: true, sessionId } : { ok: false };
         }
 
+        // Finds the real category record and its stream, the way tapping through Streams -> Category
+        // does. A search hit only carries a few fields and no stream, so without this the page opened
+        // with a bare stub (title "Career Detail <id>", no stream -> institute sections shown even for
+        // Career Clusters, and none of the category's own content). Returns null if it can't be found.
+        async function resolveArchiveCategory(catId, hintStreamId) {
+          if (!catId) return null;
+          let streams = streamItems;
+          if (!hintStreamId && (!streams || streams.length === 0)) {
+            try {
+              const streamRes = await getCareerLibraryStreams();
+              streams = normalizeStreamItems(Array.isArray(streamRes?.data) ? streamRes.data : []);
+            } catch {
+              streams = [];
+            }
+          }
+          const candidateIds = [hintStreamId, ...(streams || []).map((s) => s?.id)]
+            .filter((value, index, all) => value !== undefined && value !== null && value !== "" && all.findIndex((o) => String(o) === String(value)) === index);
+          for (const sid of candidateIds) {
+            try {
+              const res = await getCareerLibraryCategoriesByStream(sid, CAREER_LIBRARY_MODULE_ID);
+              const list = Array.isArray(res?.data) ? res.data : [];
+              const found = list.find((c) => String(c?.id) === String(catId));
+              if (found) {
+                let stream = (streams || []).find((s) => String(s?.id) === String(sid));
+                if (!stream) {
+                  try {
+                    const streamRes = await getCareerLibraryStreams();
+                    stream = normalizeStreamItems(Array.isArray(streamRes?.data) ? streamRes.data : []).find((s) => String(s?.id) === String(sid));
+                  } catch {
+                    stream = null;
+                  }
+                }
+                return {
+                  stream: stream || { id: sid, name: searchItem?.metadata?.streamName || "" },
+                  categories: normalizeStepItems(list, "category"),
+                  item: normalizeStepItems([found], "category")[0],
+                };
+              }
+            } catch {
+              // try the next stream
+            }
+          }
+          return null;
+        }
+
+        // A career / career-path search hit carries the id of the CAREER PATH itself, but the details
+        // are stored under its parent (subcategory, else second category, else category). Opening
+        // them with the career path's own id returned nothing - the empty "Career Detail <id>" page.
+        // So these hits open their deepest parent instead (the title stays the searched one).
+        const isPathLike = normalizedType === "career" || normalizedType === "careerpath";
+        const parentSubId = searchParams.get("subCategoryId") || searchItem?.subCategoryId || "";
+
         // 1. Subcategory / Career Detail (Direct inner detail view)
         if (
           normalizedType === "subcategory" ||
           normalizedType === "sub" ||
-          normalizedType === "career" ||
-          normalizedType === "careerpath" ||
-          searchParams.get("subCategoryId") ||
-          searchParams.get("career")
+          (isPathLike && parentSubId) ||
+          (!isPathLike && (searchParams.get("subCategoryId") || searchParams.get("career")))
         ) {
-          const targetId = id || searchParams.get("subCategoryId");
+          const targetId = isPathLike ? parentSubId : (id || searchParams.get("subCategoryId"));
           let detailData = null;
 
           // Gate on this career's own page; for a career path (which carries its parents' ids)
@@ -1321,7 +1386,17 @@ useEffect(() => {
 
           if (!active) return;
 
-          const sourceObj = searchItem || { id: targetId || title, title, name: title };
+          // Put the page in its real place in the archive (stream + category) so it shows the same
+          // sections as when opened step by step (e.g. no institute sections for Career Clusters).
+          const resolvedParent = await resolveArchiveCategory(categoryId, streamId);
+          if (!active) return;
+          if (resolvedParent) {
+            setSelectedStream(resolvedParent.stream);
+            setCategories(resolvedParent.categories);
+            setSelectedCategory(resolvedParent.item);
+          }
+
+          const sourceObj = { ...(searchItem || {}), id: targetId || title, title, name: title };
           const normalizedDetails = normalizeDetailItems(
             Array.isArray(detailData) ? detailData : detailData ? [detailData] : [],
             sourceObj
@@ -1340,7 +1415,7 @@ useEffect(() => {
           normalizedType === "second" ||
           searchParams.get("secondCategoryId")
         ) {
-          const targetId = id || searchParams.get("secondCategoryId");
+          const targetId = isPathLike ? secondCategoryId : (id || searchParams.get("secondCategoryId"));
           const gated = await previewGate("second", targetId);
           if (!gated.ok || !active) return;
           const nextRes = await getCareerLibraryNext("second", targetId, CAREER_LIBRARY_MODULE_ID, gated.sessionId);
@@ -1349,8 +1424,17 @@ useEffect(() => {
           const data = nextRes ?? {};
           const items = Array.isArray(data?.data) ? data.data : [];
 
+          // Place the page in its real stream / category, like a list tap would.
+          const resolvedParent = await resolveArchiveCategory(categoryId, streamId || searchItem?.streamId);
+          if (!active) return;
+          if (resolvedParent) {
+            setSelectedStream(resolvedParent.stream);
+            setCategories(resolvedParent.categories);
+            setSelectedCategory(resolvedParent.item);
+          }
+
           if (data?.type === "details") {
-            const sourceObj = searchItem || { id: targetId, name: title, title };
+            const sourceObj = { ...(searchItem || {}), id: targetId, name: title, title };
             setSelectedDetailSource(sourceObj);
             setDetails(normalizeDetailItems(items, sourceObj));
             setDetailReturnLevel("streams");
@@ -1369,7 +1453,7 @@ useEffect(() => {
           normalizedType === "category" ||
           searchParams.get("categoryId")
         ) {
-          const targetId = id || searchParams.get("categoryId");
+          const targetId = isPathLike ? categoryId : (id || searchParams.get("categoryId"));
           const gated = await previewGate("category", targetId);
           if (!gated.ok || !active) return;
           const nextRes = await getCareerLibraryNext("category", targetId, CAREER_LIBRARY_MODULE_ID, gated.sessionId);
@@ -1378,14 +1462,24 @@ useEffect(() => {
           const data = nextRes ?? {};
           const items = Array.isArray(data?.data) ? data.data : [];
 
+          // Same item the list tap would have passed (with its stream), not the bare search hit.
+          const resolved = await resolveArchiveCategory(targetId, streamId || searchItem?.streamId);
+          if (!active) return;
+          if (resolved) {
+            setSelectedStream(resolved.stream);
+            setCategories(resolved.categories);
+          }
+          const categoryItem = resolved?.item || normalizeStepItem({ ...(searchItem || {}), id: targetId, title: title || searchItem?.title }, 0, "category");
+          setSelectedCategory(categoryItem);
+
           if (data?.type === "details") {
-            const sourceObj = searchItem || { id: targetId, name: title, title };
+            const sourceObj = categoryItem;
             setSelectedDetailSource(sourceObj);
             setDetails(normalizeDetailItems(items, sourceObj));
-            setDetailReturnLevel("streams");
+            setDetailReturnLevel(resolved ? "categories" : "streams");
             setCurrentLevel("details");
           } else if (data?.type === "secondcategory") {
-            setSelectedCategory({ id: targetId, name: title, title });
+            setSelectedCategory(categoryItem);
             setSecondCategories(normalizeStepItems(items, "second"));
             setCurrentLevel("secondcategory");
             setDetailReturnLevel("streams");
@@ -1986,6 +2080,22 @@ useEffect(() => {
     function scrollTo(id) {
       const el = document.getElementById(id);
       if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    // Nothing to show (no description, career path, exams, jobs, salary, media or institutes): say so
+    // plainly instead of an empty page with only a "Quick Jump" box.
+    if (sidebarSections.length === 0 && !detail?.media) {
+      return (
+        <div
+          key={`detail-${detail?.id ?? index}`}
+          className="rounded-[26px] border border-[#f0e4e2] bg-white p-8 text-center shadow-sm"
+        >
+          <p className="m-0 text-lg font-black text-[#1a0a09]">{title}</p>
+          <p className="mb-0 mt-2 text-sm text-[#8c6c67]">
+            No details have been added for this yet. Please check back soon.
+          </p>
+        </div>
+      );
     }
 
     return (
