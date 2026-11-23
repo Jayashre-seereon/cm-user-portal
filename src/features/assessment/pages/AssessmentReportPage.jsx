@@ -185,7 +185,7 @@ export default function AssessmentReportPage() {
   const studentSchool = student.school || rawData.school || user?.school || (isDemo ? "DAV, Pokhariput, BBSR" : "");
   const studentEmail = student.email || rawData.email || rawData.user?.email || user?.email || (isDemo ? "aryaman1012@gmail.com" : "");
   const studentPhone = student.phone || rawData.phone || rawData.user?.mobile || user?.mobile || (isDemo ? "+91-88958 12485" : "");
-  const completedDate = student.completedAt || rawData.completedAt || rawData.createdAt || (isDemo ? "2025-11-26T10:00:00.000Z" : new Date().toISOString());
+  const completedDate = student.completedAt || rawData.completedAt || rawData.createdAt || (isDemo ? "2025-11-26T10:00:00.000Z" : "");
 
   const formattedDate = formatDate(completedDate) || "-";
 
@@ -309,6 +309,23 @@ const rankedDomains = (items, fallbackItems, minScore = 45, labels = {}) => {
   const goalOrientationLabel = longPct >= shortPct ? "LONG TERM" : "SHORT TERM";
 const topPersonalityTrait = [...domainPerson].sort((a, b) => scoreFor(b) - scoreFor(a))[0];
 const goalOrientationSummary = Math.abs(longPct - shortPct) <= 10 ? "Balanced Planner" : (longPct > shortPct ? "Long-Term" : "Short-Term");
+
+  // Page 30 advice follows THIS student's result: their highest learning style(s) and goal orientation.
+  const learningKeyOf = (style) => {
+    if (!style) return null;
+    if (["V", "A", "Rd", "K"].includes(style.facet)) return style.facet;
+    const n = String(style.name || "").toLowerCase();
+    if (n.includes("visual")) return "V";
+    if (n.includes("audit")) return "A";
+    if (n.includes("read")) return "Rd";
+    if (n.includes("kin")) return "K";
+    return null;
+  };
+  const primaryLearningKey = learningKeyOf(topLearningStyles[0]);
+  const studyLearningLabel = topLearningStyles.slice(0, 2).map((s) => s.name).join(" / ") || "-";
+  const studyTips = (primaryLearningKey && INTERP.learning_style?.[primaryLearningKey]?.tips) || [];
+  const goalOrientationKey = goalOrientationSummary === "Balanced Planner" ? "balanced" : goalOrientationSummary === "Long-Term" ? "long_term" : "short_term";
+  const pathwayPoints = String(INTERP.goal_orientation?.[goalOrientationKey]?.text || "").split(/(?<=\.)\s+/).filter(Boolean);
   // 5 Top Default fallback clusters matching the PDF
   const sampleTop5 = [
     {
@@ -2065,11 +2082,11 @@ const goalOrientationSummary = Math.abs(longPct - shortPct) <= 10 ? "Balanced Pl
 
            <div className="flex flex-col gap-2 text-sm font-semibold text-slate-800 mb-3 pb-2 border-b border-slate-200">
   <div>
-    Learning style: <strong className="text-[#1E232A]">Visual</strong>
+    Learning style: <strong className="text-[#1E232A]">{studyLearningLabel}</strong>
   </div>
 
   <div>
-    Goal orientation: <strong className="text-[#1E232A]">Balanced Planner</strong>
+    Goal orientation: <strong className="text-[#1E232A]">{goalOrientationSummary}</strong>
   </div>
 </div>
 
@@ -2079,10 +2096,9 @@ const goalOrientationSummary = Math.abs(longPct - shortPct) <= 10 ? "Balanced Pl
                   HOW TO STUDY, BASED ON HOW YOU LEARN
                 </strong>
                 <ul className="list-disc pl-5 space-y-0.5">
-                  <li>Convert chapters into mind-maps, flowcharts and labelled diagrams.</li>
-                  <li>Use colour-coding for formulas, dates and key terms.</li>
-                  <li>Watch good video explanations, then redraw the idea from memory.</li>
-                  <li>Sit where you can clearly see the board and the teacher's demonstrations.</li>
+                  {studyTips.map((tip) => (
+                    <li key={tip}>{tip}</li>
+                  ))}
                 </ul>
               </div>
 
@@ -2091,8 +2107,9 @@ const goalOrientationSummary = Math.abs(longPct - shortPct) <= 10 ? "Balanced Pl
                   YOUR PATHWAY APPROACH
                 </strong>
                 <ul className="list-disc pl-5 space-y-0.5">
-                  <li>You're balanced between studying further and starting work early.</li>
-                  <li>A smart path: choose degree courses that include internships, apprenticeships or placement years — you earn experience while keeping the door open to higher studies.</li>
+                  {pathwayPoints.map((point) => (
+                    <li key={point}>{point}</li>
+                  ))}
                 </ul>
               </div>
             </div>
