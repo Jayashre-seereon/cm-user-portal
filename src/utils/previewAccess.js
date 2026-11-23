@@ -5,19 +5,17 @@
 // to appear: filtering a list, or pinning a search hit to the top, must not unlock it.
 // Each module decides "free" in one of three ways:
 //
-//   flag   - the server marks each item (scholarships): metadata.isFree
+//   flag   - the server marks each item (scholarships, videos): metadata.isFree
 //   list   - the first N items of the module's full, unfiltered list are free
-//            (institutes, exams, quiz, mentors, newsletters, study abroad, videos). The
+//            (institutes, exams, quiz, mentors, newsletters, study abroad). The
 //            pages build that set from their full list with buildFreeKeys(); search loads
-//            the same list, in the same order, with loadPreviewFreeKeys(). Videos are
-//            "list" AND flag: an item the admin marked free is free as well.
+//            the same list, in the same order, with loadPreviewFreeKeys().
 //   server - the page asks the server when the item is opened (career archive).
 //
 // Keep the `list` loaders in sync with the page they mirror (noted on each).
 
 import { getEntranceExams } from "../api/entranceExamApi";
 import { getInstitutes } from "../api/instituteApi";
-import { getMasterClasses } from "../api/masterclassApi";
 import { getMentors } from "../api/mentorApi";
 import { getNewsletters } from "../api/newsletterApi";
 import { getQuizzes } from "../api/quizApi";
@@ -27,7 +25,8 @@ import { sortQuizzes } from "./quizOrder";
 // How many items a module lists as free in preview.
 export const PREVIEW_FREE_ITEM_LIMIT = 4;
 
-const FLAG_ROUTES = new Set(["/app/scholarships"]);
+// Videos are decided by the admin (each video's free flag), not by "first 4 free".
+const FLAG_ROUTES = new Set(["/app/scholarships", "/app/learn"]);
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 // Newest first by createdAt, falling back to the highest id when dates are missing.
@@ -58,10 +57,6 @@ export const previewListLoaders = {
   "/app/book-mentor": async () => {
     const mentors = (await getMentors()).filter((mentor) => mentor?.raw?.status !== false);
     return sortMentorsNewestFirst(mentors);
-  },
-  // LearnPage (Career & Personality Videos): active videos, newest first (its default sort).
-  "/app/learn": async () => {
-    return sortNewestFirst(await getMasterClasses());
   },
   // NewsletterPage: newest first.
   "/app/newsletter": async () => {
@@ -103,16 +98,11 @@ export function buildFreeKeys(list = [], limit = PREVIEW_FREE_ITEM_LIMIT) {
   return keys;
 }
 
-// Videos: unlocked only with full access, or when the video is free (one of the 4 newest, or
-// marked free by the admin). A video that came back with NO lock flag at all is NOT unlocked,
+// Videos: unlocked only with full access, or when the ADMIN marked the video free. There is no
+// "first 4 free" rule for videos. A video that came back with NO lock flag at all is NOT unlocked,
 // so a missing flag (e.g. a request that didn't say which module it was for) can't unlock it.
-export function isVideoUnlocked(video, { fullAccess = false, freeKeys } = {}) {
-  return (
-    fullAccess ||
-    video?.accessTier === "full" ||
-    Boolean(video?.isFree) ||
-    isPreviewFree(freeKeys, video)
-  );
+export function isVideoUnlocked(video, { fullAccess = false } = {}) {
+  return fullAccess || video?.accessTier === "full" || Boolean(video?.isFree);
 }
 
 // Is this item one of the free ones? (`freeKeys` comes from buildFreeKeys)
