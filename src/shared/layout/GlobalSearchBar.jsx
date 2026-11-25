@@ -33,6 +33,19 @@ import { buildDashboardModules, moduleRouteMap } from "../../utils/dashboard";
 import { UnlockRedirectModal } from "../../features/portal/components/portalPageShared";
 import { moduleCards } from "../../data/careermapData";
 
+
+
+// Pages that are searchable as modules but are not dashboard module cards (adding them to
+// moduleCards would add a duplicate card on the dashboard).
+const SEARCH_ONLY_MODULES = [
+  {
+    title: "Subscription",
+    subtitle: "View subscription plans and unlock premium modules.",
+    route: "/app/subscription",
+    keywords: ["subscriptions", "plans", "pricing", "premium", "upgrade"],
+  },
+];
+const SEARCHABLE_MODULES = [...moduleCards, ...SEARCH_ONLY_MODULES];
 const CATEGORY_TABS = [
   { key: "all", label: "All", groupKey: null },
   { key: "modules", label: "Modules", groupKey: "modules", types: ["module"] },
@@ -477,8 +490,10 @@ export default function GlobalSearchBar({ className = "" }) {
           ).values()];
           const nonInstituteResults = entityResults.filter((item) => !instituteResults.includes(item));
           const mergedEntityResults = [...nonInstituteResults, ...normalizedInstituteResults];
-          const moduleResults = moduleCards
-            .filter((module) => matchesWordPrefix(module.title, normalizedQuery))
+          const moduleResults = SEARCHABLE_MODULES
+            .filter((module) =>
+              [module.title, ...(module.keywords || [])].some((text) => matchesWordPrefix(text, normalizedQuery))
+            )
             .map((module) => ({
               id: `module:${module.route}`,
               title: module.title,
