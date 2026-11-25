@@ -1,3 +1,4 @@
+import { getResultSubtitle } from "../../utils/searchResultSubtitle";
 import {
   AppstoreOutlined,
   BookOutlined,
@@ -909,13 +910,13 @@ export default function GlobalSearchBar({ className = "" }) {
                           )}
                         </div>
 
-                        {item.subtitle && (
+                        {getResultSubtitle(item) && (
                           <div className="truncate text-[11.5px] text-[#8c6c67]">
-                            {item.subtitle}
+                            {getResultSubtitle(item)}
                           </div>
                         )}
 
-                        {item.description && !item.subtitle && (
+                        {item.description && !getResultSubtitle(item) && (
                           <div className="truncate text-[11.5px] text-[#8c6c67]">
                             {item.description}
                           </div>

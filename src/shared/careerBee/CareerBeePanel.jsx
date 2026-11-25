@@ -1,3 +1,4 @@
+import { getResultSubtitle } from "../../utils/searchResultSubtitle";
 import {
   CloseOutlined,
   ExclamationCircleOutlined,
@@ -222,8 +223,8 @@ function LinkCards({ links, onOpen }) {
                     {badge.label}
                   </span>
                 </span>
-                {item.subtitle ? (
-                  <span className="block truncate text-[11px] text-[#8c6c67]">{item.subtitle}</span>
+                {getResultSubtitle(item) ? (
+                  <span className="block truncate text-[11px] text-[#8c6c67]">{getResultSubtitle(item)}</span>
                 ) : null}
               </span>
               <RightOutlined className="shrink-0 text-[10px] text-gray-300 group-hover:text-[#9a2119]" aria-hidden="true" />
