@@ -1,3 +1,5 @@
+import { loadSearchPlans, matchPlans } from "../../utils/planSearch";
+import { getPlans } from "../../api/subscriptionApi";
 import { getResultSubtitle } from "../../utils/searchResultSubtitle";
 import {
   AppstoreOutlined,
@@ -94,7 +96,7 @@ function getTypeConfig(item = {}) {
 
   if (type === "module" || group === "modules") {
     return {
-      label: "Module",
+      label: item.isPlan ? "Plan" : "Module",
       badgeClass: "bg-[#fdf0ee] text-[#9a2119] border-[#f2d1c7]",
       avatarBg: "#9a2119",
       icon: <AppstoreOutlined />,
@@ -503,6 +505,10 @@ export default function GlobalSearchBar({ className = "" }) {
               badge: "Module",
               navigation: { path: module.route },
             }));
+          // Subscription plans (name / price / validity / modules), cached between searches.
+          const plans = await loadSearchPlans(getPlans);
+          if (requestId !== requestIdRef.current) return;
+          moduleResults.push(...matchPlans(plans, trimmed, "/app/subscription"));
           const results = [...moduleResults, ...mergedEntityResults];
           const grouped = { ...(response.grouped || {}) };
           if (normalizedInstituteResults.length) grouped.institutions = normalizedInstituteResults;
