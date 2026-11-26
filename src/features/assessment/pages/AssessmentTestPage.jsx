@@ -196,6 +196,24 @@ export default function AssessmentTestPage() {
 
   const overallPercent = Math.min(100, Math.round((totalAnsweredCount / totalQuestionsCount) * 100));
 
+  // Aptitude questions are optional: count the blank ones so the submit summary is honest.
+  const skippedAptitudeCount = useMemo(() => {
+    let count = 0;
+    sections.forEach((sec, sIdx) => {
+      if (!isAptitudeSection(sec, sIdx)) return;
+      (Array.isArray(sec.questions) ? sec.questions : []).forEach((q) => {
+        const a = answers[q.id];
+        const answered =
+          (a?.likertValue !== undefined && a?.likertValue !== null) ||
+          (a?.selectedOptionId !== undefined && a?.selectedOptionId !== null) ||
+          (a?.optionKey !== undefined && a?.optionKey !== null);
+        if (!answered) count += 1;
+      });
+    });
+    return count;
+  }, [sections, answers]);
+  const aptitudeSectionIndex = sections.findIndex((sec, sIdx) => isAptitudeSection(sec, sIdx));
+
   // Section-wise statistics
   const sectionStats = useMemo(() => {
     return sections.map((sec, idx) => {
@@ -621,13 +639,13 @@ const aptitudeTimerLabel = `${String(Math.floor(aptitudeTimeLeft / 60)).padStart
             const questionNumber = qIdx + 1;
             const currentAnswer = answers[question.id] || {};
 
-            // Determine if question belongs specifically to Section 1 (Personal Profiling / CRI)
+            // Decide by section only: facet codes are shared across domains (Work Values "CO" =
+            // Conservation vs profiling "CO" = Confidence), so they must not choose the answer scale.
             const isProfilingQuestion =
               activeSection?.code === "profiling" ||
               activeSection?.id === "profiling" ||
               activeSection?.key === "profiling" ||
-              ["SA", "CE", "DC", "PP", "CO", "SP"].includes(question.facet) ||
-              (typeof question.code === "string" && /^(SA|CE|DC|PP|CO|SP)\d*/i.test(question.code));
+              activeDomainMeta?.id === "profiling";
 
             // Section 1 Question 16 is single choice SP
             const isSP =
@@ -967,10 +985,36 @@ const aptitudeTimerLabel = `${String(Math.floor(aptitudeTimeLeft / 60)).padStart
               <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-3xl text-emerald-600">
                 🎉
               </div>
-              <h4 className="text-base font-bold text-slate-900">All {totalQuestionsCount} Questions Answered!</h4>
-              <p className="mt-1 text-sm text-slate-800">
-                Your responses are complete. Click submit to generate your comprehensive Career Compass Report.
-              </p>
+              {skippedAptitudeCount > 0 ? (
+                <>
+                  <h4 className="text-base font-bold text-slate-900">
+                    {totalQuestionsCount - skippedAptitudeCount} of {totalQuestionsCount} Questions Answered
+                  </h4>
+                  <p className="mt-1 text-sm text-slate-800">
+                    {skippedAptitudeCount} aptitude question{skippedAptitudeCount === 1 ? " is" : "s are"} unanswered.
+                    Aptitude is optional, but skipped questions score 0. You can still submit.
+                  </p>
+                  {aptitudeSectionIndex >= 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsSubmitModalVisible(false);
+                        handleSwitchSection(aptitudeSectionIndex);
+                      }}
+                      className="mt-3 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:border-slate-400"
+                    >
+                      Review Aptitude
+                    </button>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <h4 className="text-base font-bold text-slate-900">All {totalQuestionsCount} Questions Answered!</h4>
+                  <p className="mt-1 text-sm text-slate-800">
+                    Your responses are complete. Click submit to generate your comprehensive Career Compass Report.
+                  </p>
+                </>
+              )}
             </div>
           )}
         </div>

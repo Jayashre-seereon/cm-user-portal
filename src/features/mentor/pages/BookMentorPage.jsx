@@ -37,52 +37,53 @@ function formatNumericDate(value) {
   };
 }
 
-function normalizeSlotKey(value) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\./g, "")
-    .replace(/\s*(am|pm)$/i, "");
+// Mentor slots are Indian time (Asia/Kolkata, UTC+05:30), the same way the backend reads them
+// (utils/mentorBookingTime.js), whatever the browser's time zone is.
+const IST_OFFSET_MINUTES = 330;
+
+function parseTimeToken(token) {
+  const normalized = String(token || "").trim();
+  if (!normalized) return null;
+  const meridiemMatch = normalized.match(/(AM|PM)$/i);
+  const timeOnly = normalized.replace(/\s*(AM|PM)$/i, "").trim();
+  const [hoursValue = "0", minutesValue = "0"] = timeOnly.split(":");
+  let hours = Number(hoursValue);
+  const minutes = Number(minutesValue || 0);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  if (meridiemMatch) {
+    if (hours === 12) hours = 0;
+    if (meridiemMatch[1].toUpperCase() === "PM") hours += 12;
+  }
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return { hours, minutes };
 }
 
-function parseSlotEndDateTime(dateKey, timeSlot) {
-  if (!dateKey || !timeSlot) {
-    return null;
+// Compares slots by their 24-hour times, so a booked "10:00 AM" never also blocks "10:00 PM".
+function normalizeSlotKey(value) {
+  const tokens = String(value || "")
+    .replace(/\./g, "")
+    .split(/[-\u2013\u2014]/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+  const times = tokens.map((token) => parseTimeToken(token));
+  if (tokens.length && times.every(Boolean)) {
+    return times.map((time) => `${String(time.hours).padStart(2, "0")}:${String(time.minutes).padStart(2, "0")}`).join("-");
   }
+  return String(value || "").toLowerCase().replace(/\s+/g, "").replace(/\./g, "");
+}
 
-  const keyMatch = String(dateKey).match(/^(\d{4})-(\d{2})-(\d{2})/);
-  const date = keyMatch
-    ? new Date(Number(keyMatch[1]), Number(keyMatch[2]) - 1, Number(keyMatch[3]))
-    : new Date(dateKey);
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-
-  const rawValue = String(timeSlot).trim();
-  if (!rawValue) {
-    return null;
-  }
-
-  const endPart = rawValue.split("-").pop()?.trim() || rawValue;
-  const match = endPart.match(/^(\d{1,2}):(\d{2})(?:\s*([AaPp][Mm]))?$/);
-  if (!match) {
-    return null;
-  }
-
-  let hours = Number(match[1]);
-  const minutes = Number(match[2]);
-  const period = match[3]?.toUpperCase() || "";
-
-  if (period === "PM" && hours < 12) {
-    hours += 12;
-  }
-  if (period === "AM" && hours === 12) {
-    hours = 0;
-  }
-
-  const slotDateTime = new Date(date);
-  slotDateTime.setHours(hours, minutes, 0, 0);
-  return slotDateTime;
+// Start of a slot as an exact moment (its first time on the date key, in IST) - the same rule
+// the backend uses: a slot can't be booked once it has started.
+function getSlotStartDate(dateKey, timeSlot) {
+  const keyMatch = String(dateKey || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!keyMatch || !timeSlot) return null;
+  const startToken = String(timeSlot).replace(/\./g, "").split(/[-\u2013\u2014]/)[0]?.trim();
+  const time = parseTimeToken(startToken);
+  if (!time) return null;
+  return new Date(
+    Date.UTC(Number(keyMatch[1]), Number(keyMatch[2]) - 1, Number(keyMatch[3]), time.hours, time.minutes) -
+      IST_OFFSET_MINUTES * 60000
+  );
 }
 
 function getSlotEndTimeValue(timeSlot) {
@@ -98,10 +99,11 @@ function getSlotEndTimeValue(timeSlot) {
   return rawValue.split("-").pop()?.trim() || rawValue;
 }
 
+// Today's calendar date in India (slot dates are IST days).
 function todayDateKey() {
-  const now = new Date();
+  const ist = new Date(Date.now() + IST_OFFSET_MINUTES * 60000);
   const pad = (n) => String(n).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  return `${ist.getUTCFullYear()}-${pad(ist.getUTCMonth() + 1)}-${pad(ist.getUTCDate())}`;
 }
 
 function normalizeAvailability(availability) {
@@ -372,16 +374,12 @@ export default function BookMentorPage() {
     }
 
     return allSlots.filter((slot) => {
-      const slotDateTime = parseSlotEndDateTime(activeDate.key, slot);
-      if (!slotDateTime) {
+      const slotStart = getSlotStartDate(activeDate.key, slot);
+      if (!slotStart) {
         return true;
       }
-
-      if (slotDateTime.getTime() <= now.getTime()) {
-        return false;
-      }
-
-      return true;
+      // Hidden once the slot has STARTED (the backend refuses it from then on).
+      return slotStart.getTime() > now.getTime();
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dates, selectedDate, nowTick]);
@@ -960,6 +958,7 @@ export default function BookMentorPage() {
 
       <div className="mt-4 rounded-[24px] border border-[#f0e4e2] bg-white p-5">
         <div className="text-[13px] font-bold text-[#1a0a09]">Select Time</div>
+        <div className="mt-0.5 text-[11px] font-semibold text-[#8c6c67]">All times are in IST (India Standard Time).</div>
         {selectedDate ? (
           <div className="mt-3 flex flex-wrap gap-2.5">
             {availableSlots.length ? (
