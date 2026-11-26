@@ -651,7 +651,17 @@ body {
   display: flex;
   gap: 16px;
   align-items: center;
-  margin-bottom: 20px;
+}
+
+/* Same gap between every card. (The page body's Tailwind space-y-* only gives the
+   later rows a top margin and clears their bottom margin, so a bottom margin here made
+   the gap under the first card bigger than the rest.) */
+.pdf-page-body > .trait-card-row {
+  margin: 0 !important;
+}
+
+.pdf-page-body > .trait-card-row + .trait-card-row {
+  margin-top: 18px !important;
 }
 
 .trait-card-left {

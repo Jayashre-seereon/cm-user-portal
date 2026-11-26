@@ -53,7 +53,7 @@ export default function WebsiteNavbar() {
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [lockedModule, setLockedModule] = useState(null);
-  const { unreadNotificationsCount, userProfile, logout, notifications, dashboardData } = useAppState();
+  const { unreadNotificationsCount, userProfile, logout, notifications, dashboardData, markNotificationsAsRead } = useAppState();
   const authUser = useAuthStore((state) => state.user);
   const previewNotifications = (notifications || []).slice(0, 3);
 
@@ -132,8 +132,9 @@ export default function WebsiteNavbar() {
           <Badge count={unreadNotificationsCount} size="small" />
           <button
             type="button"
-            className="text-[11px] text-[#9b8f97] transition-colors hover:text-brand"
-            onClick={() => {}}
+            className="text-[11px] text-[#9b8f97] transition-colors hover:text-brand disabled:cursor-default disabled:opacity-50 disabled:hover:text-[#9b8f97]"
+            disabled={!unreadNotificationsCount}
+            onClick={() => markNotificationsAsRead()}
           >
             Mark all read
           </button>
@@ -144,6 +145,12 @@ export default function WebsiteNavbar() {
         {previewNotifications.map((item) => (
           <div
             key={item.id}
+            role="button"
+            tabIndex={0}
+            onClick={() => markNotificationsAsRead([item.id])}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") markNotificationsAsRead([item.id]);
+            }}
             className={`cursor-pointer rounded-xl border px-3 py-2.5 transition-colors ${
               item.unread
                 ? "border-[#f2d1c7] bg-[#fff7f4] hover:bg-[#fef0eb]"

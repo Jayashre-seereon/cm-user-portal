@@ -58,3 +58,8 @@
     animation: none;
   }
 }
+
+/* The floating contact buttons would cover the open chat panel. */
+body.career-bee-open .floating-contact-actions {
+  display: none !important;
+}
