@@ -326,6 +326,24 @@ function getSearchResultPath(item) {
   return url.split("?")[0].replace(/\/$/, "");
 }
 
+// Module access checks (POST /module-access/check is read-only), started as soon as results
+// show so a click doesn't have to wait for one. A result older than ACCESS_CHECK_TTL_MS is
+// asked again, and failures are never cached.
+const ACCESS_CHECK_TTL_MS = 15000;
+const accessCheckCache = new Map();
+function getModuleAccessFresh(moduleId) {
+  const key = String(moduleId);
+  const cached = accessCheckCache.get(key);
+  if (cached && Date.now() - cached.at < ACCESS_CHECK_TTL_MS) return cached.promise;
+  const at = Date.now();
+  const promise = checkModuleAccess(moduleId).then((response) => ({ response, checkedAt: at }));
+  accessCheckCache.set(key, { at, promise });
+  promise.catch(() => {
+    if (accessCheckCache.get(key)?.promise === promise) accessCheckCache.delete(key);
+  });
+  return promise;
+}
+
 export default function GlobalSearchBar({ className = "" }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -392,6 +410,17 @@ export default function GlobalSearchBar({ className = "" }) {
     return () => {
       active = false;
     };
+  }, [searchData.results, moduleByRoute]);
+
+  // Check access for the modules in the results now, so opening one doesn't wait for it.
+  useEffect(() => {
+    const ids = new Set();
+    searchData.results.forEach((item) => {
+      const path = getSearchResultPath(item);
+      const module = path && path !== "/app/assessment" ? moduleByRoute.get(path) : null;
+      if (module?.id) ids.add(module.id);
+    });
+    ids.forEach((moduleId) => getModuleAccessFresh(moduleId).catch(() => {}));
   }, [searchData.results, moduleByRoute]);
 
   // When the search box opens, warm up the small lists so results can show Unlocked /
@@ -675,7 +704,7 @@ export default function GlobalSearchBar({ className = "" }) {
       // The assessment page handles its own lock state, so it is never blocked here.
       if (targetModule?.id && targetPath !== "/app/assessment") {
         try {
-          const response = await checkModuleAccess(targetModule.id);
+          const { response, checkedAt } = await getModuleAccessFresh(targetModule.id);
           if (!response?.allowed) {
             setLockedModule({ title: targetModule.title });
             return;
@@ -703,6 +732,7 @@ export default function GlobalSearchBar({ className = "" }) {
             state: {
               moduleId: targetModule.id,
               accessStatus: response.mode || "full",
+              accessCheckedAt: checkedAt,
               ...searchNavigationState,
             },
           });
