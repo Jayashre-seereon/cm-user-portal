@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { getDashboard } from "../api/dashboardApi";
 import { useAuthStore } from "../store/authStore";
-import { getNotifications } from "../api/notificationApi";
+import { getNotifications, markNotificationsRead } from "../api/notificationApi";
 import { getMentorBookings, getSubscriptions, getTestHistory } from "../api/profile";
 import { formatCurrency, formatDate as formatSharedDate } from "../utils/format";
 import { mapApiUserToProfile, mergeServerProfile } from "../utils/auth";
@@ -361,6 +361,21 @@ export function AppStateProvider({ children }) {
     if (accessToken) refreshNotifications().catch(() => {});
   }, [accessToken, refreshNotifications]);
 
+  // Marks notifications read (all unread ones when no ids are given) and updates the badge at once.
+  const markNotificationsAsRead = useCallback((ids) => {
+    const wanted = ids ? new Set(ids.map(String)) : null;
+    const toMark = (state.notifications || [])
+      .filter((item) => item.unread && (!wanted || wanted.has(String(item.id))))
+      .map((item) => item.id);
+    if (!toMark.length) return;
+    markNotificationsRead(toMark);
+    const marked = new Set(toMark.map(String));
+    setState((current) => ({
+      ...current,
+      notifications: (current.notifications || []).map((item) => (marked.has(String(item.id)) ? { ...item, unread: false } : item)),
+    }));
+  }, [state.notifications]);
+
   useEffect(() => {
     if (!accessToken) {
       setState((current) => ({ ...current, dashboardData: null }));
@@ -568,6 +583,7 @@ export function AppStateProvider({ children }) {
       hasActiveSubscription: activePlanIds.length > 0,
       unreadNotificationsCount: (state.notifications || []).filter((item) => item.unread).length,
       refreshNotifications,
+      markNotificationsAsRead,
       isUnlocked(feature) {
         return unlockedFeatures.has(feature);
       },
@@ -773,7 +789,7 @@ export function AppStateProvider({ children }) {
       dashboardData: state.dashboardData,
       profileIncomplete: state.profileIncomplete,
     };
-  }, [state, refreshNotifications]);
+  }, [state, refreshNotifications, markNotificationsAsRead]);
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 }

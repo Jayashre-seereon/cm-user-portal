@@ -7,16 +7,12 @@ import "./careerBeeSession";
 const loadPanel = () => import("./CareerBeePanel");
 const CareerBeePanel = lazy(loadPanel);
 
-// Pages where a floating assistant would distract or cover controls:
-// an assessment / psychometric test in progress, and payment screens.
+// Career Bee shows on every page except while an assessment / psychometric test
+// is being taken and on the checkout screen.
 const HIDDEN_ROUTE_PATTERNS = [
   /^\/(?:app\/)?assessment\/attempt\/[^/]+\/?$/i,
   /^\/(?:app\/)?psychometric-test(?:\/|$)/i,
   /^\/(?:app\/)?checkout(?:\/|$)/i,
-  // Personality quiz: the question view shares the /app/quiz URL and its
-  // full-width "Next" button sits where the bee floats on phones.
-  /^\/(?:app\/)?quiz(?:\/|$)/i,
-  /^\/(?:app\/)?payment-success(?:\/|$)/i,
 ];
 
 export function isCareerBeeHiddenOn(pathname = "") {
@@ -112,6 +108,13 @@ export default function CareerBeeLauncher() {
   useEffect(() => {
     if (hidden) setOpen(false);
   }, [hidden]);
+
+  // While the chat is open, hide the floating Call / WhatsApp / Message buttons:
+  // they sit on the right edge and would cover the chat's text and options.
+  useEffect(() => {
+    document.body.classList.toggle("career-bee-open", open);
+    return () => document.body.classList.remove("career-bee-open");
+  }, [open]);
 
   const handleClose = useCallback(({ restoreFocus = true } = {}) => {
     setOpen(false);

@@ -1,19 +1,34 @@
 import { getResultSubtitle } from "../../utils/searchResultSubtitle";
 import {
+  ArrowLeftOutlined,
   CloseOutlined,
+  DownOutlined,
   ExclamationCircleOutlined,
+  FilterOutlined,
+  HomeOutlined,
   InfoCircleOutlined,
+  LoadingOutlined,
+  LockOutlined,
   PlusOutlined,
   ReloadOutlined,
   RightOutlined,
+  SearchOutlined,
   SendOutlined,
 } from "@ant-design/icons";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { askChatbot, CHATBOT_DEFAULT_CONFIG, getChatbotConfig } from "../../api/chatbotApi";
+import { useLocation, useNavigate } from "react-router-dom";
+import { askChatbot, CHATBOT_DEFAULT_CONFIG, flowChatbot, getChatbotConfig } from "../../api/chatbotApi";
 import Bee from "../../asset/bee.png";
+import { UnlockRedirectModal } from "../../features/portal/components/portalPageShared";
+import { useAppState } from "../../state/AppStateContext";
 import { useAuthStore } from "../../store/authStore";
-import { resolveNavigationTarget } from "../../utils/searchNavigation";
+import {
+  buildModuleByRoute,
+  getLinkAccess,
+  loadPreviewFreeKeys,
+  previewRoutesToLoad,
+  resolveChatOpen,
+} from "./careerBeeAccess";
 import { getChatOwnerKey, loadConversation, saveConversation } from "./careerBeeSession";
 
 const HISTORY_LIMIT = 20;
@@ -197,14 +212,15 @@ function getLinkBadge(item = {}) {
   return { label: item.badge || item.type || "Explore", className: "bg-[#fdf0ee] text-[#9a2119] border-[#f2d1c7]" };
 }
 
-function LinkCards({ links, onOpen }) {
+function LinkCards({ links, onOpen, getAccess }) {
   if (!links?.length) return null;
 
   return (
-    <ul className="m-0 mt-2 list-none space-y-1.5 p-0" aria-label="Suggested results">
+    <ul className="m-0 mt-2 w-full list-none space-y-1.5 p-0" aria-label="Suggested results">
       {links.map((item, index) => {
         if (!item || typeof item.title !== "string") return null;
         const badge = getLinkBadge(item);
+        const access = getAccess ? getAccess(item) : null;
         return (
           <li key={`${item.type || "item"}-${item.id ?? index}-${index}`}>
             <button
@@ -227,7 +243,19 @@ function LinkCards({ links, onOpen }) {
                   <span className="block truncate text-[11px] text-[#8c6c67]">{getResultSubtitle(item)}</span>
                 ) : null}
               </span>
-              <RightOutlined className="shrink-0 text-[10px] text-gray-300 group-hover:text-[#9a2119]" aria-hidden="true" />
+              {access === "locked" ? (
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-700">
+                  <LockOutlined aria-hidden="true" />
+                  Locked
+                </span>
+              ) : access === "pending" ? (
+                <LoadingOutlined spin className="shrink-0 text-[11px] text-gray-400" aria-label="Checking access" />
+              ) : (
+                <span className="inline-flex shrink-0 items-center gap-0.5 text-[10.5px] font-semibold text-[#9a2119]">
+                  {access === "free" ? "Free · View" : "View details"}
+                  <RightOutlined className="text-[9px]" aria-hidden="true" />
+                </span>
+              )}
             </button>
           </li>
         );
@@ -259,6 +287,125 @@ function PageButtons({ pages, onOpen }) {
   );
 }
 
+// Navigation / extra actions shown as small pills under the choices.
+const NAV_OPTION = /^(main menu|back|show more|other help topics|change filters|narrow down\b.*|about\b.*)$/i;
+const COUNT_LABEL = /^(.*\S)\s*\((\d[\d,]*)\)$/;
+const ALL_LABEL = /^(all\b|both\b)/i;
+
+function splitCount(label) {
+  const match = label.match(COUNT_LABEL);
+  return match ? { text: match[1], count: Number(match[2].replace(/,/g, "")).toLocaleString("en-IN") } : { text: label, count: null };
+}
+
+function navIcon(label) {
+  if (/^back$/i.test(label)) return <ArrowLeftOutlined className="text-[10px]" aria-hidden="true" />;
+  if (/^main menu$/i.test(label)) return <HomeOutlined className="text-[10px]" aria-hidden="true" />;
+  if (/^show more$/i.test(label)) return <DownOutlined className="text-[10px]" aria-hidden="true" />;
+  if (/^(change filters|narrow down)/i.test(label)) return <FilterOutlined className="text-[10px]" aria-hidden="true" />;
+  if (/^about\b/i.test(label)) return <InfoCircleOutlined className="text-[10px]" aria-hidden="true" />;
+  return null;
+}
+
+/**
+ * The answer choices for a question:
+ *  - a few short choices (the main menu, streams, Government / Private...) -> a 2-column grid of tiles;
+ *  - longer lists or lists with counts (domains, states, categories) -> a tidy list with the
+ *    count on the right, and a search box when there are many;
+ *  - Back / Show more / Main menu -> small pills underneath.
+ */
+function OptionChips({ options, onChoose, disabled, label = "Choose an option" }) {
+  const [query, setQuery] = useState("");
+  const valid = (options || []).filter((option) => option && typeof option.label === "string" && typeof option.step === "string");
+  if (!valid.length) return null;
+
+  const choices = valid.filter((option) => !NAV_OPTION.test(option.label));
+  const navs = valid.filter((option) => NAV_OPTION.test(option.label));
+  const grid = choices.length <= 12 && choices.every((option) => option.label.length <= 26 && !COUNT_LABEL.test(option.label));
+  const searchable = choices.length > 8;
+  const needle = query.trim().toLowerCase();
+  const shown = needle ? choices.filter((option) => option.label.toLowerCase().includes(needle)) : choices;
+
+  return (
+    <div className="mt-2 w-full space-y-2" role="group" aria-label={label}>
+      {choices.length ? (
+        grid ? (
+          <div className="grid grid-cols-2 gap-1.5">
+            {choices.map((option, index) => (
+              <button
+                key={`${option.step}-${option.label}-${index}`}
+                type="button"
+                onClick={() => onChoose(option)}
+                disabled={disabled}
+                className="flex min-h-[40px] items-center justify-between gap-1.5 rounded-xl border border-[#f0dcd6] bg-white px-3 py-2 text-left text-[12px] font-semibold leading-4 text-[#3a2d2f] shadow-[0_1px_2px_rgba(154,33,25,0.06)] transition hover:border-[#9a2119] hover:bg-[#fdf6f4] hover:text-[#9a2119] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#9a2119]/30 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <span className="min-w-0 break-words">{option.label}</span>
+                <RightOutlined className="shrink-0 text-[9px] text-[#c9a9a3]" aria-hidden="true" />
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-xl border border-[#eaded9] bg-white shadow-[0_1px_2px_rgba(154,33,25,0.06)]">
+            {searchable ? (
+              <div className="flex items-center gap-2 border-b border-[#f1e7e4] bg-[#fcf9f8] px-3 py-1.5">
+                <SearchOutlined className="text-[11px] text-[#a8938f]" aria-hidden="true" />
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder={`Search ${choices.length} options`}
+                  aria-label="Search the options"
+                  className="min-w-0 flex-1 bg-transparent py-1 text-[12px] text-[#3a2d2f] placeholder:text-[#b3a29f] focus:outline-none"
+                />
+              </div>
+            ) : null}
+            <div className="career-bee-scroll max-h-64 divide-y divide-[#f3ebe8] overflow-y-auto">
+              {shown.map((option, index) => {
+                const { text, count } = splitCount(option.label);
+                const all = ALL_LABEL.test(text);
+                return (
+                  <button
+                    key={`${option.step}-${option.label}-${index}`}
+                    type="button"
+                    onClick={() => onChoose(option)}
+                    disabled={disabled}
+                    className={`group flex w-full items-center gap-2 px-3 py-2 text-left text-[12.5px] leading-[18px] transition hover:bg-[#fdf3f0] focus:outline-none focus-visible:bg-[#fdf3f0] disabled:cursor-not-allowed disabled:opacity-50 ${
+                      all ? "bg-[#fdf7f5] font-semibold text-[#9a2119]" : "text-[#3a2d2f]"
+                    }`}
+                  >
+                    <span className="min-w-0 flex-1 break-words group-hover:text-[#9a2119]">{text}</span>
+                    {count ? (
+                      <span className="shrink-0 rounded-full bg-[#f6eeeb] px-2 py-0.5 text-[10.5px] font-semibold tabular-nums text-[#86716d]">{count}</span>
+                    ) : null}
+                    <RightOutlined className="shrink-0 text-[9px] text-[#c9a9a3] group-hover:text-[#9a2119]" aria-hidden="true" />
+                  </button>
+                );
+              })}
+              {!shown.length ? <p className="px-3 py-3 text-center text-[12px] text-[#9a8a87]">{`No option matches "${query}".`}</p> : null}
+            </div>
+          </div>
+        )
+      ) : null}
+
+      {navs.length ? (
+        <div className="flex flex-wrap gap-1.5">
+          {navs.map((option, index) => (
+            <button
+              key={`${option.step}-${option.label}-${index}`}
+              type="button"
+              onClick={() => onChoose(option)}
+              disabled={disabled}
+              className="inline-flex max-w-full items-center gap-1 rounded-full border border-[#e5dcd9] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#6b5a5d] transition hover:border-[#9a2119] hover:text-[#9a2119] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#9a2119]/30 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {navIcon(option.label)}
+              <span className="min-w-0 break-words">{option.label}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 /* ---------- Bubbles ---------- */
 
 function BeeAvatar() {
@@ -273,12 +420,12 @@ function AssistantRow({ children, label = "Career Bee" }) {
   return (
     <div className="flex items-start gap-2" role="group" aria-label={label}>
       <BeeAvatar />
-      <div className="min-w-0 max-w-[85%]">{children}</div>
+      <div className="flex min-w-0 max-w-[85%] flex-1 flex-col items-start">{children}</div>
     </div>
   );
 }
 
-function MessageItem({ message, onOpenLink, onOpenPage, onRetry, retryDisabled }) {
+function MessageItem({ message, onOpenLink, onOpenPage, onRetry, retryDisabled, onChoose, showOptions, getAccess }) {
   if (message.role === "user") {
     return (
       <div className="flex justify-end" role="group" aria-label="You">
@@ -329,8 +476,9 @@ function MessageItem({ message, onOpenLink, onOpenPage, onRetry, retryDisabled }
       <div className="break-words rounded-2xl rounded-tl-md border border-[#eaded9] bg-[#faf7f5] px-3.5 py-2.5 text-[13px] leading-5 text-[#3a2d2f]">
         <RichText text={message.content} />
       </div>
-      <LinkCards links={message.links} onOpen={onOpenLink} />
+      <LinkCards links={message.links} onOpen={onOpenLink} getAccess={getAccess} />
       <PageButtons pages={message.pages} onOpen={onOpenPage} />
+      {showOptions ? <OptionChips options={message.options} onChoose={onChoose} disabled={retryDisabled} /> : null}
     </AssistantRow>
   );
 }
@@ -382,7 +530,13 @@ function getDesktopPlacement(viewportHeight, lift) {
 
 export default function CareerBeePanel({ open, onClose, lift = 0 }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const user = useAuthStore((state) => state.user);
+  const { dashboardData } = useAppState();
+  const moduleByRoute = useMemo(() => buildModuleByRoute(dashboardData?.modules || []), [dashboardData]);
+  const [freeKeysByRoute, setFreeKeysByRoute] = useState({});
+  const [lockInfo, setLockInfo] = useState(null);
+  const [menu, setMenu] = useState(null);
   const ownerKey = getChatOwnerKey(user);
   const isMobile = useIsMobile();
   const viewportHeight = useViewportHeight();
@@ -425,6 +579,19 @@ export default function CareerBeePanel({ open, onClose, lift = 0 }) {
       active = false;
     };
   }, []);
+
+  // The main menu for this user (the live module list, with a lock on locked modules).
+  useEffect(() => {
+    let active = true;
+    flowChatbot({ step: "menu" })
+      .then((result) => {
+        if (active && result.options.length) setMenu({ prompt: result.reply, options: result.options });
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [ownerKey]);
 
   useEffect(
     () => () => {
@@ -504,10 +671,10 @@ export default function CareerBeePanel({ open, onClose, lift = 0 }) {
   }, []);
 
   const send = useCallback(
-    async (rawText, { pendingUserId = null } = {}) => {
-      const text = String(rawText || "").trim();
+    async (rawText, { pendingUserId = null, option = null } = {}) => {
+      const text = option ? String(option.label || "").trim() : String(rawText || "").trim();
       if (!text || abortRef.current || disabled) return;
-      if (text.length > maxLength) return;
+      if (!option && text.length > maxLength) return;
 
       const owner = chatRef.current.owner;
       const userId = pendingUserId || createId("user");
@@ -518,7 +685,7 @@ export default function CareerBeePanel({ open, onClose, lift = 0 }) {
 
       if (!pendingUserId) {
         appendMessage({ id: userId, role: "user", content: text });
-        setDraft("");
+        if (!option) setDraft("");
       }
 
       const controller = new AbortController();
@@ -527,7 +694,9 @@ export default function CareerBeePanel({ open, onClose, lift = 0 }) {
       setAnnouncement("");
 
       try {
-        const result = await askChatbot({ message: text, history, signal: controller.signal });
+        const result = option
+          ? await flowChatbot({ step: option.step, params: option.params, signal: controller.signal })
+          : await askChatbot({ message: text, history, signal: controller.signal });
         if (controller.signal.aborted || chatRef.current.owner !== owner) return;
 
         const reply = result.reply?.trim()
@@ -539,6 +708,7 @@ export default function CareerBeePanel({ open, onClose, lift = 0 }) {
           content: reply,
           links: result.links,
           pages: result.pages,
+          options: result.options,
         });
         setAnnouncement(`${botName}: ${toPlainText(reply)}`);
       } catch (error) {
@@ -560,6 +730,7 @@ export default function CareerBeePanel({ open, onClose, lift = 0 }) {
             kind: "error",
             content,
             retryText: text,
+            retryOption: option,
             retryUserId: userId,
           });
           setAnnouncement(content);
@@ -579,10 +750,15 @@ export default function CareerBeePanel({ open, onClose, lift = 0 }) {
       if (abortRef.current) return;
       setChat((current) => ({ ...current, list: current.list.filter((entry) => entry.id !== errorEntry.id) }));
       const userStillThere = chatRef.current.list.some((entry) => entry.id === errorEntry.retryUserId);
-      send(errorEntry.retryText, { pendingUserId: userStillThere ? errorEntry.retryUserId : null });
+      send(errorEntry.retryText, {
+        pendingUserId: userStillThere ? errorEntry.retryUserId : null,
+        option: errorEntry.retryOption || null,
+      });
     },
     [send]
   );
+
+  const handleChoose = useCallback((option) => send(null, { option }), [send]);
 
   const handleNewChat = useCallback(() => {
     abortRef.current?.abort();
@@ -598,30 +774,53 @@ export default function CareerBeePanel({ open, onClose, lift = 0 }) {
     if (isMobileWidth()) onClose({ restoreFocus: false });
   }, [onClose]);
 
-  // Same navigation logic as a global-search result (GlobalSearchBar → handleSelectItem).
-  const handleOpenLink = useCallback(
-    (item) => {
-      if (!item) return;
-      const targetUrl = resolveNavigationTarget(item);
-      afterNavigate();
-      if (/^https?:\/\//i.test(targetUrl)) {
-        window.location.href = targetUrl;
-      } else {
-        navigate(targetUrl, { state: { searchItem: item } });
+  // Same navigation AND lock rules as a global-search result (GlobalSearchBar → handleSelectItem).
+  const openWithAccess = useCallback(
+    async (target) => {
+      const result = await resolveChatOpen({
+        ...target,
+        moduleByRoute,
+        isLoggedIn: Boolean(user),
+        returnTo: `${location.pathname}${location.search}`,
+      });
+      if (result.action === "locked") {
+        setLockInfo(result.lock);
+        return;
       }
+      afterNavigate();
+      if (result.action === "external") window.location.href = result.url;
+      else navigate(result.url, result.state ? { state: result.state } : undefined);
     },
-    [afterNavigate, navigate]
+    [afterNavigate, location.pathname, location.search, moduleByRoute, navigate, user]
   );
+
+  const handleOpenLink = useCallback((item) => (item ? openWithAccess({ item }) : undefined), [openWithAccess]);
 
   const handleOpenPage = useCallback(
     (page) => {
       const path = String(page?.web || "");
       if (!path.startsWith("/") || path.startsWith("//")) return;
-      afterNavigate();
-      navigate(path);
+      openWithAccess({ page });
     },
-    [afterNavigate, navigate]
+    [openWithAccess]
   );
+
+  // Preview modules: load which items are free so the cards can show Locked / Free.
+  useEffect(() => {
+    const links = chat.list.slice(-12).flatMap((entry) => entry.links || []);
+    const routes = previewRoutesToLoad(links, moduleByRoute).filter((route) => freeKeysByRoute[route] === undefined);
+    let active = true;
+    routes.forEach((route) => {
+      loadPreviewFreeKeys(route)
+        .then((keys) => active && setFreeKeysByRoute((prev) => ({ ...prev, [route]: keys })))
+        .catch(() => active && setFreeKeysByRoute((prev) => ({ ...prev, [route]: false })));
+    });
+    return () => {
+      active = false;
+    };
+  }, [chat.list, moduleByRoute, freeKeysByRoute]);
+
+  const getAccess = useCallback((item) => getLinkAccess(item, moduleByRoute, freeKeysByRoute), [moduleByRoute, freeKeysByRoute]);
 
   function handleSubmit(event) {
     event.preventDefault();
@@ -635,7 +834,11 @@ export default function CareerBeePanel({ open, onClose, lift = 0 }) {
     }
   }
 
-  const showStarters = messages.length === 0 && Boolean(config) && !disabled;
+  const showMenu = messages.length === 0 && Boolean(config) && !disabled;
+  // Only the newest answer's chips are live: older ones would branch an earlier step.
+  const lastMessage = messages[messages.length - 1];
+  const optionsMessageId =
+    lastMessage && lastMessage.role === "assistant" && !lastMessage.kind && lastMessage.options?.length ? lastMessage.id : null;
   const showCounter = draft.length >= maxLength - 200;
 
   return (
@@ -711,20 +914,13 @@ export default function CareerBeePanel({ open, onClose, lift = 0 }) {
           />
         ) : null}
 
-        {showStarters ? (
-          <div className="flex flex-wrap gap-1.5 pl-9" aria-label="Suggested questions">
-            {effectiveConfig.starterPrompts.map((prompt) => (
-              <button
-                key={prompt}
-                type="button"
-                onClick={() => send(prompt)}
-                disabled={sending}
-                className="rounded-full border border-[#f2d1c7] bg-[#fdf7f5] px-3 py-1.5 text-left text-[11.5px] font-semibold text-[#9a2119] transition hover:border-[#9a2119] hover:bg-[#fdf0ed] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#9a2119]/30 disabled:opacity-50"
-              >
-                {prompt}
-              </button>
-            ))}
-          </div>
+        {showMenu ? (
+          <AssistantRow>
+            <div className="break-words rounded-2xl rounded-tl-md border border-[#eaded9] bg-[#faf7f5] px-3.5 py-2.5 text-[13px] leading-5 text-[#3a2d2f]">
+              <RichText text={menu?.prompt || effectiveConfig.menuPrompt} />
+            </div>
+            <OptionChips options={menu?.options || effectiveConfig.menu} onChoose={handleChoose} disabled={sending} label="Topics" />
+          </AssistantRow>
         ) : null}
 
         {messages.map((message) => (
@@ -735,6 +931,9 @@ export default function CareerBeePanel({ open, onClose, lift = 0 }) {
             onOpenPage={handleOpenPage}
             onRetry={handleRetry}
             retryDisabled={sending}
+            onChoose={handleChoose}
+            showOptions={message.id === optionsMessageId && !sending}
+            getAccess={getAccess}
           />
         ))}
 
@@ -764,7 +963,7 @@ export default function CareerBeePanel({ open, onClose, lift = 0 }) {
             disabled={disabled}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={`Ask ${botName} anything...`}
+            placeholder="Choose an option above or type your question..."
             aria-describedby={showCounter ? "career-bee-counter" : undefined}
             className="max-h-[120px] min-h-[36px] flex-1 resize-none border-0 bg-transparent py-2 text-[13px] leading-5 text-[#241d1e] placeholder-[#9b8f97] focus:outline-none disabled:cursor-not-allowed"
           />
@@ -790,6 +989,19 @@ export default function CareerBeePanel({ open, onClose, lift = 0 }) {
           ) : null}
         </div>
       </form>
+
+      <UnlockRedirectModal
+        open={Boolean(lockInfo)}
+        title={lockInfo?.heading || "Module Locked"}
+        itemLabel={lockInfo?.itemLabel ?? lockInfo?.title}
+        description={lockInfo?.message}
+        onCancel={() => setLockInfo(null)}
+        onConfirm={() => {
+          setLockInfo(null);
+          afterNavigate();
+          navigate("/app/subscription");
+        }}
+      />
     </div>
   );
 }
