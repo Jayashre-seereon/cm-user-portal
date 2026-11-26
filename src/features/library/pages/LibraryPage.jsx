@@ -28,7 +28,7 @@ import {
 
 import { useEffect, useMemo, useRef, useState, useContext } from "react";
 import { useLocation } from "react-router-dom";
-import { Empty } from "antd";
+import { Empty, Spin } from "antd";
 import {
   getCareerLibraryCategoriesByStream,
   getCareerLibraryDetails,
@@ -971,6 +971,17 @@ function InstituteCard({ inst, badge }) {
   );
 }
 
+// True when the URL / navigation state asks the archive to open a specific page
+// (global search, Career Bee, shared link) instead of the stream list.
+function hasArchiveDeepLink(loc) {
+  const params = new URLSearchParams(loc?.search || "");
+  return Boolean(
+    loc?.state?.searchItem ||
+    ["type", "id", "title", "career", "search", "streamId", "stream", "categoryId", "secondCategoryId", "subCategoryId"]
+      .some((key) => params.get(key))
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function LibraryPage() {
   const { isUnlocked, registerFreeDetailAccess, savedCareers, toggleSavedCareer, dashboardData } =
@@ -1004,6 +1015,9 @@ const [indiaStates, setIndiaStates] = useState([]);
   const [unlockModalItem, setUnlockModalItem] = useState(null);
 
   const pageLocation = useLocation();
+  // While a search link is being resolved, hide the stream list so the user goes
+  // straight to the requested page instead of seeing Streams first.
+  const [deepLinkPending, setDeepLinkPending] = useState(() => hasArchiveDeepLink(pageLocation));
   const accessStatus = pageLocation.state?.accessStatus || "preview";
   const [moduleStatus, setModuleStatus] = useState(accessStatus);
   const [resolvedCareerModuleId, setResolvedCareerModuleId] = useState(null);
@@ -1268,8 +1282,16 @@ useEffect(() => {
     const categoryId = searchParams.get("categoryId") || searchItem?.categoryId || "";
     const secondCategoryId = searchParams.get("secondCategoryId") || searchItem?.secondCategoryId || "";
 
-    if (!type && !id && !title) return;
-    if (!CAREER_LIBRARY_MODULE_ID) return;
+    if (!type && !id && !title) {
+      setDeepLinkPending(false);
+      return;
+    }
+    setDeepLinkPending(true);
+    if (!CAREER_LIBRARY_MODULE_ID) {
+      // Module id still resolving; don't hide the archive forever if it never arrives.
+      const fallback = setTimeout(() => setDeepLinkPending(false), 10000);
+      return () => clearTimeout(fallback);
+    }
 
     let active = true;
 
@@ -1284,7 +1306,21 @@ useEffect(() => {
         // server only starts a preview for categories marked free, so anything under a locked
         // category opens the unlock prompt instead of an empty page - and the institute lists on
         // it, which sit outside the content check, never show.
-        const access = await checkModuleAccess(CAREER_LIBRARY_MODULE_ID).catch(() => null);
+        // The global search bar checks module access right before navigating and passes the
+        // result in state, so reuse it instead of a second round trip (the server still enforces
+        // access on every content request).
+        const navState = pageLocation.state || {};
+        const freshSearchAccess =
+          navState.fromGlobalSearch &&
+          navState.searchItem &&
+          // Only a check made moments ago counts (not one restored by Back/Forward or a reload).
+          Number.isFinite(navState.accessCheckedAt) &&
+          Date.now() - navState.accessCheckedAt < 30000 &&
+          ["full", "preview"].includes(String(navState.accessStatus || "").toLowerCase()) &&
+          String(navState.moduleId) === String(CAREER_LIBRARY_MODULE_ID);
+        const access = freshSearchAccess
+          ? { allowed: true, mode: String(navState.accessStatus).toLowerCase() }
+          : await checkModuleAccess(CAREER_LIBRARY_MODULE_ID).catch(() => null);
         if (!active) return;
         if (access && access.allowed === false) {
           setUnlockModalItem({
@@ -1311,45 +1347,47 @@ useEffect(() => {
         // does. A search hit only carries a few fields and no stream, so without this the page opened
         // with a bare stub (title "Career Detail <id>", no stream -> institute sections shown even for
         // Career Clusters, and none of the category's own content). Returns null if it can't be found.
+        // Streams are fetched at most once per deep link (the page may not have loaded them yet).
+        let streamsPromise = null;
+        function loadStreamsOnce() {
+          if (streamItems && streamItems.length > 0) return Promise.resolve(streamItems);
+          if (!streamsPromise) {
+            streamsPromise = getCareerLibraryStreams()
+              .then((res) => normalizeStreamItems(Array.isArray(res?.data) ? res.data : []))
+              .catch(() => []);
+          }
+          return streamsPromise;
+        }
+        async function findCategoryInStream(sid, catId) {
+          try {
+            const res = await getCareerLibraryCategoriesByStream(sid, CAREER_LIBRARY_MODULE_ID);
+            const list = Array.isArray(res?.data) ? res.data : [];
+            const found = list.find((c) => String(c?.id) === String(catId));
+            return found ? { sid, list, found } : null;
+          } catch {
+            return null;
+          }
+        }
         async function resolveArchiveCategory(catId, hintStreamId) {
           if (!catId) return null;
-          let streams = streamItems;
-          if (!hintStreamId && (!streams || streams.length === 0)) {
-            try {
-              const streamRes = await getCareerLibraryStreams();
-              streams = normalizeStreamItems(Array.isArray(streamRes?.data) ? streamRes.data : []);
-            } catch {
-              streams = [];
-            }
+          const streamsReady = loadStreamsOnce();
+          let hit = hintStreamId ? await findCategoryInStream(hintStreamId, catId) : null;
+          const streams = await streamsReady;
+          if (!hit) {
+            // No (or wrong) stream hint: ask every stream at once instead of one after another.
+            const others = (streams || [])
+              .map((s) => s?.id)
+              .filter((sid) => sid !== undefined && sid !== null && sid !== "" && String(sid) !== String(hintStreamId));
+            const results = await Promise.all(others.map((sid) => findCategoryInStream(sid, catId)));
+            hit = results.find(Boolean) || null;
           }
-          const candidateIds = [hintStreamId, ...(streams || []).map((s) => s?.id)]
-            .filter((value, index, all) => value !== undefined && value !== null && value !== "" && all.findIndex((o) => String(o) === String(value)) === index);
-          for (const sid of candidateIds) {
-            try {
-              const res = await getCareerLibraryCategoriesByStream(sid, CAREER_LIBRARY_MODULE_ID);
-              const list = Array.isArray(res?.data) ? res.data : [];
-              const found = list.find((c) => String(c?.id) === String(catId));
-              if (found) {
-                let stream = (streams || []).find((s) => String(s?.id) === String(sid));
-                if (!stream) {
-                  try {
-                    const streamRes = await getCareerLibraryStreams();
-                    stream = normalizeStreamItems(Array.isArray(streamRes?.data) ? streamRes.data : []).find((s) => String(s?.id) === String(sid));
-                  } catch {
-                    stream = null;
-                  }
-                }
-                return {
-                  stream: stream || { id: sid, name: searchItem?.metadata?.streamName || "" },
-                  categories: normalizeStepItems(list, "category"),
-                  item: normalizeStepItems([found], "category")[0],
-                };
-              }
-            } catch {
-              // try the next stream
-            }
-          }
-          return null;
+          if (!hit) return null;
+          const stream = (streams || []).find((s) => String(s?.id) === String(hit.sid));
+          return {
+            stream: stream || { id: hit.sid, name: searchItem?.metadata?.streamName || "" },
+            categories: normalizeStepItems(hit.list, "category"),
+            item: normalizeStepItems([hit.found], "category")[0],
+          };
         }
 
         // A career / career-path search hit carries the id of the CAREER PATH itself, but the details
@@ -1385,6 +1423,8 @@ useEffect(() => {
               gateId = categoryId;
             }
           }
+          // Look up the stream / category at the same time as the details, not after them.
+          const parentPromise = resolveArchiveCategory(categoryId, streamId).catch(() => null);
           const gated = await previewGate(gateType, gateId);
           if (!gated.ok || !active) return;
 
@@ -1401,7 +1441,7 @@ useEffect(() => {
 
           // Put the page in its real place in the archive (stream + category) so it shows the same
           // sections as when opened step by step (e.g. no institute sections for Career Clusters).
-          const resolvedParent = await resolveArchiveCategory(categoryId, streamId);
+          const resolvedParent = await parentPromise;
           if (!active) return;
           if (resolvedParent) {
             setSelectedStream(resolvedParent.stream);
@@ -1429,6 +1469,7 @@ useEffect(() => {
           searchParams.get("secondCategoryId")
         ) {
           const targetId = isPathLike ? secondCategoryId : (id || searchParams.get("secondCategoryId"));
+          const parentPromise = resolveArchiveCategory(categoryId, streamId || searchItem?.streamId).catch(() => null);
           const gated = await previewGate("second", targetId);
           if (!gated.ok || !active) return;
           const nextRes = await getCareerLibraryNext("second", targetId, CAREER_LIBRARY_MODULE_ID, gated.sessionId);
@@ -1438,7 +1479,7 @@ useEffect(() => {
           const items = Array.isArray(data?.data) ? data.data : [];
 
           // Place the page in its real stream / category, like a list tap would.
-          const resolvedParent = await resolveArchiveCategory(categoryId, streamId || searchItem?.streamId);
+          const resolvedParent = await parentPromise;
           if (!active) return;
           if (resolvedParent) {
             setSelectedStream(resolvedParent.stream);
@@ -1467,6 +1508,7 @@ useEffect(() => {
           searchParams.get("categoryId")
         ) {
           const targetId = isPathLike ? categoryId : (id || searchParams.get("categoryId"));
+          const parentPromise = resolveArchiveCategory(targetId, streamId || searchItem?.streamId).catch(() => null);
           const gated = await previewGate("category", targetId);
           if (!gated.ok || !active) return;
           const nextRes = await getCareerLibraryNext("category", targetId, CAREER_LIBRARY_MODULE_ID, gated.sessionId);
@@ -1476,7 +1518,7 @@ useEffect(() => {
           const items = Array.isArray(data?.data) ? data.data : [];
 
           // Same item the list tap would have passed (with its stream), not the bare search hit.
-          const resolved = await resolveArchiveCategory(targetId, streamId || searchItem?.streamId);
+          const resolved = await parentPromise;
           if (!active) return;
           if (resolved) {
             setSelectedStream(resolved.stream);
@@ -1540,7 +1582,10 @@ useEffect(() => {
       } catch (err) {
         console.warn("Deep link handling error:", err);
       } finally {
-        if (active) setLoading(false);
+        if (active) {
+          setLoading(false);
+          setDeepLinkPending(false);
+        }
       }
     }
 
@@ -2434,6 +2479,19 @@ className="inline-flex h-10 w-10 items-center justify-center rounded-full border
   }
 
   // ── JSX ─────────────────────────────────────────────────────────────────────
+
+  if (deepLinkPending) {
+    return (
+      <ModuleScreen className="space-y-5">
+        <div className="flex items-center justify-end gap-4">
+          <PageHero backOnly onBack={goToDashboard} className="shrink-0 self-start" />
+        </div>
+        <div className="flex min-h-[40vh] items-center justify-center">
+          <Spin size="large" tip="Loading details..."><div className="p-8" /></Spin>
+        </div>
+      </ModuleScreen>
+    );
+  }
 
   return (
     <ModuleScreen className="space-y-5">
